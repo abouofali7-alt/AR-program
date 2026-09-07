@@ -12,13 +12,15 @@ try {
 const bcrypt = require('bcryptjs');
 
 const DB_FILE = process.env.AR_DB_PATH || (process.env.VERCEL ? '/tmp/ar_program.db' : path.join(__dirname, 'ar_program.db'));
-let db;
-try {
-    db = new DatabaseSync(DB_FILE);
-    db.exec('PRAGMA foreign_keys = ON;');
-    try { db.prepare('PRAGMA journal_mode = WAL').get(); } catch (e) {}
-} catch (e) {
-    console.error('Failed to open SQLite database:', e.message);
+let db = null;
+if (typeof DatabaseSync === 'function') {
+    try {
+        db = new DatabaseSync(DB_FILE);
+        db.exec('PRAGMA foreign_keys = ON;');
+        try { db.prepare('PRAGMA journal_mode = WAL').get(); } catch (e) {}
+    } catch (e) {
+        console.error('Failed to open SQLite database:', e.message);
+    }
 }
 
 function round2(v) {
