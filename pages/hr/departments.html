@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>الأقسام — AR-Program</title>
+    <link rel="stylesheet" href="../../css/global.css">
+    <link rel="stylesheet" href="../../css/app.css">
+    <link rel="stylesheet" href="../../css/responsive.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
+</head>
+<body class="dark-mode">
+    <div id="appHeaderHost"></div>
+    <main class="pagewrap" style="padding:22px;max-width:800px;margin:0 auto;">
+        <div class="page-head">
+            <div>
+                <h2>الأقسام</h2>
+                <div class="sub">الأقسام التنظيمية للمنشأة</div>
+            </div>
+            <div class="page-actions">
+                <button class="btn btn-primary-soft" onclick="openDeptModal()"><i class="fa-solid fa-plus"></i> قسم جديد</button>
+            </div>
+        </div>
+        <div class="table-card">
+            <div class="table-head">الأقسام</div>
+            <div class="table-scroll">
+                <table class="data-table">
+                    <thead><tr><th>الاسم</th><th>الوصف</th><th>عدد الموظفين</th><th></th></tr></thead>
+                    <tbody id="deptBody"></tbody>
+                </table>
+            </div>
+        </div>
+    </main>
+
+    <div id="deptModal" class="modal-mask" style="visibility:hidden;opacity:0;">
+        <div class="modal-box">
+            <h3 id="deptModalTitle">قسم جديد</h3>
+            <div class="form-grid">
+                <div class="form-item"><label>الاسم</label><input id="dName"></div>
+                <div class="form-item"><label>الوصف</label><input id="dDesc"></div>
+            </div>
+            <div style="display:flex;gap:10px;justify-content:flex-end;">
+                <button class="btn btn-secondary" onclick="closeDeptModal()">إلغاء</button>
+                <button class="btn btn-primary-soft" onclick="saveDept()">حفظ</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="../../js/ui.js"></script>
+    <script src="../../js/db.js"></script>
+    <script src="../../js/app.js"></script>
+    <script>
+        let editingDid = null;
+        async function load() {
+            const [depts, employees] = await Promise.all([ARDB.getAll('departments'), ARDB.getAll('employees')]);
+            const empCount = {};
+            employees.forEach(e => { if (e.departmentId) empCount[e.departmentId] = (empCount[e.departmentId] || 0) + 1; });
+            document.getElementById('deptBody').innerHTML = depts.map(d =>
+                '<tr><td><b>' + d.name + '</b></td>' +
+                '<td>' + (d.description || '') + '</td>' +
+                '<td class="num">' + (empCount[d.id] || 0) + '</td>' +
+                '<td style="text-align:left;white-space:nowrap;">' +
+                '<button class="btn btn-sm" onclick="editDept(' + d.id + ')"><i class="fa-solid fa-pen"></i></button> ' +
+                '<button class="btn btn-sm btn-danger" onclick="delDept(' + d.id + ')"><i class="fa-solid fa-trash"></i></button></td></tr>'
+            ).join('') || '<tr><td colspan="4" class="empty-state">لا توجد أقسام</td></tr>';
+        }
+        function openDeptModal() {
+            editingDid = null;
+            document.getElementById('deptModalTitle').textContent = 'قسم جديد';
+            document.getElementById('dName').value = '';
+            document.getElementById('dDesc').value = '';
+            document.getElementById('deptModal').style.visibility = 'visible';
+            document.getElementById('deptModal').style.opacity = '1';
+        }
+        function closeDeptModal() {
+            document.getElementById('deptModal').style.visibility = 'hidden';
+            document.getElementById('deptModal').style.opacity = '0';
+        }
+        async function editDept(id) {
+            const d = await ARDB.getById('departments', id);
+            if (!d) return;
+            editingDid = id;
+            document.getElementById('deptModalTitle').textContent = 'تعديل قسم';
+            document.getElementById('dName').value = d.name || '';
+            document.getElementById('dDesc').value = d.description || '';
+            document.getElementById('deptModal').style.visibility = 'visible';
+            document.getElementById('deptModal').style.opacity = '1';
+        }
+        async function saveDept() {
+            const name = document.getElementById('dName').value.trim();
+            if (!name) { UI.toast('الاسم مطلوب', 'warn'); return; }
+            const rec = { name, description: document.getElementById('dDesc').value.trim() };
+            if (editingDid) { rec.id = editingDid; await ARDB.put('departments', rec); UI.toast('تم التعديل', 'ok'); }
+            else { await ARDB.add('departments', rec); UI.toast('تمت الإضافة', 'ok'); }
+            closeDeptModal(); load();
+        }
+        async function delDept(id) {
+            const ok = await UI.confirmBox('حذف القسم؟');
+            if (!ok) return;
+            await ARDB.remove('departments', id);
+            UI.toast('تم الحذف', 'ok'); load();
+        }
+        load();
+    </script>
+</body>
+</html>

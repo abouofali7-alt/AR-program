@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>قائمة الدخل — AR-Program</title>
+    <link rel="stylesheet" href="../../css/global.css">
+    <link rel="stylesheet" href="../../css/app.css">
+    <link rel="stylesheet" href="../../css/responsive.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
+</head>
+<body class="dark-mode">
+    <div id="appHeaderHost"></div>
+    <main class="pagewrap" style="padding:22px;max-width:1000px;margin:0 auto;">
+        <div class="page-head">
+            <div>
+                <h2>قائمة الدخل</h2>
+                <div class="sub">الإيرادات والمصروفات وصافي الربح/الخسارة</div>
+            </div>
+        </div>
+        <div class="table-card">
+            <div class="table-head">قائمة الدخل</div>
+            <div class="table-scroll">
+                <table class="data-table">
+                    <thead><tr><th>البند</th><th>المبلغ</th></tr></thead>
+                    <tbody id="plBody"></tbody>
+                </table>
+            </div>
+        </div>
+    </main>
+
+    <script src="../../js/ui.js"></script>
+    <script src="../../js/db.js"></script>
+    <script src="../../js/app.js"></script>
+    <script>
+        async function load() {
+            const [accounts, entries] = await Promise.all([ARDB.getAll('accounts'), ARDB.getAll('journalEntries')]);
+            const credits = {}, debits = {};
+            entries.forEach(en => (en.lines || []).forEach(l => {
+                if (!credits[l.accountId]) credits[l.accountId] = 0;
+                if (!debits[l.accountId]) debits[l.accountId] = 0;
+                credits[l.accountId] += (l.credit || 0);
+                debits[l.accountId] += (l.debit || 0);
+            }));
+
+            let income = 0, expense = 0;
+            const rows = [];
+            accounts.filter(a => a.parentId).forEach(a => {
+                if (a.type === 'income') {
+                    const amt = (credits[a.id] || 0) - (debits[a.id] || 0);
+                    if (amt > 0) {
+                        income += amt;
+                        rows.push({ name: a.name, amt, kind: 'income' });
+                    }
+                } else if (a.type === 'expense') {
+                    const amt = (debits[a.id] || 0) - (credits[a.id] || 0);
+                    if (amt > 0) {
+                        expense += amt;
+                        rows.push({ name: a.name, amt, kind: 'expense' });
+                    }
+                }
+            });
+
+            const net = income - expense;
+            const body = document.getElementById('plBody');
+            body.innerHTML =
+                '<tr style="background:var(--card-hover);"><td colspan="2" style="font-weight:800;color:var(--success);"><i class="fa-solid fa-arrow-up"></i> الإيرادات</td></tr>' +
+                rows.filter(r => r.kind === 'income').map(r => '<tr><td style="padding-right:30px;">' + r.name + '</td><td class="num">' + UI.money(r.amt) + '</td></tr>').join('') +
+                '<tr><td style="font-weight:700;">إجمالي الإيرادات</td><td class="num" style="font-weight:700;color:var(--success);">' + UI.money(income) + '</td></tr>' +
+                '<tr style="background:var(--card-hover);"><td colspan="2" style="font-weight:800;color:var(--danger);"><i class="fa-solid fa-arrow-down"></i> المصروفات</td></tr>' +
+                rows.filter(r => r.kind === 'expense').map(r => '<tr><td style="padding-right:30px;">' + r.name + '</td><td class="num">' + UI.money(r.amt) + '</td></tr>').join('') +
+                '<tr><td style="font-weight:700;">إجمالي المصروفات</td><td class="num" style="font-weight:700;color:var(--danger);">' + UI.money(expense) + '</td></tr>' +
+                '<tr style="background:var(--card-hover);font-weight:800;font-size:1.05rem;">' +
+                '<td>صافي ' + (net >= 0 ? 'الربح' : 'الخسارة') + '</td>' +
+                '<td class="num" style="color:' + (net >= 0 ? 'var(--success)' : 'var(--danger)') + ';">' + UI.money(Math.abs(net)) + '</td></tr>';
+        }
+        load();
+    </script>
+</body>
+</html>

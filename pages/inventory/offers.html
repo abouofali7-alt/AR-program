@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>عروض المنتجات — AR-Program</title>
+    <link rel="stylesheet" href="../../css/global.css">
+    <link rel="stylesheet" href="../../css/app.css">
+    <link rel="stylesheet" href="../../css/responsive.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
+</head>
+<body class="dark-mode">
+    <div id="appHeaderHost"></div>
+    <main class="pagewrap" style="padding:22px;max-width:1200px;margin:0 auto;">
+        <div class="page-head">
+            <div>
+                <h2>عروض المنتجات</h2>
+                <div class="sub">الخصومات الترويجية والعروض الخاصة</div>
+            </div>
+            <div class="page-actions">
+                <button class="btn btn-primary-soft" onclick="openOfferModal()"><i class="fa-solid fa-plus"></i> عرض جديد</button>
+            </div>
+        </div>
+        <div class="table-card">
+            <div class="table-head">العروض النشطة</div>
+            <div class="table-scroll">
+                <table class="data-table">
+                    <thead><tr><th>المنتج</th><th>النوع</th><th>القيمة</th><th>الفترة</th><th>الحالة</th><th></th></tr></thead>
+                    <tbody id="offerBody"></tbody>
+                </table>
+            </div>
+        </div>
+    </main>
+
+    <div id="offerModal" class="modal-mask" style="visibility:hidden;opacity:0;">
+        <div class="modal-box">
+            <h3 id="offerModalTitle">عرض جديد</h3>
+            <div class="form-grid">
+                <div class="form-item" style="grid-column:1/-1;"><label>المنتج</label><select id="oProduct"></select></div>
+                <div class="form-item"><label>النوع</label>
+                    <select id="oType"><option value="percent">نسبة مئوية</option><option value="fixed">مبلغ ثابت</option></select>
+                </div>
+                <div class="form-item"><label>القيمة</label><input type="number" id="oValue" step="0.01" min="0"></div>
+                <div class="form-item"><label>يبدأ في</label><input type="date" id="oStart"></div>
+                <div class="form-item"><label>ينتهي في</label><input type="date" id="oEnd"></div>
+            </div>
+            <div style="display:flex;gap:10px;justify-content:flex-end;">
+                <button class="btn btn-secondary" onclick="closeOfferModal()">إلغاء</button>
+                <button class="btn btn-primary-soft" onclick="saveOffer()">حفظ</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="../../js/ui.js"></script>
+    <script src="../../js/db.js"></script>
+    <script src="../../js/app.js"></script>
+    <script>
+        let editingOid = null;
+
+        async function load() {
+            const [offers, products] = await Promise.all([ARDB.getAll('offers'), ARDB.getAll('products')]);
+            const pById = {}; products.forEach(p => pById[p.id] = p);
+            const today = new Date(); today.setHours(0, 0, 0, 0);
+
+            document.getElementById('offerBody').innerHTML = offers.map(o => {
+                const active = o.active && (!o.end || new Date(o.end + 'T23:59:59') >= today);
+                const label = o.type === 'percent' ? (o.value + '%') : UI.money(o.value);
+                const period = (o.start || '...') + ' → ' + (o.end || 'مستمر');
+                return '<tr>' +
+                    '<td><b>' + (pById[o.productId] ? pById[o.productId].name : 'منتج ' + o.productId) + '</b></td>' +
+                    '<td><span class="badge ' + (o.type === 'percent' ? 'badge-purple' : 'badge-blue') + '">' + (o.type === 'percent' ? 'نسبة' : 'مبلغ ثابت') + '</span></td>' +
+                    '<td class="num" style="font-weight:700;color:var(--success);">' + label + '</td>' +
+                    '<td>' + period + '</td>' +
+                    '<td>' + (active ? '<span class="badge badge-green">مفعّل</span>' : '<span class="badge badge-red">موقوف</span>') + '</td>' +
+                    '<td style="text-align:left;white-space:nowrap;">' +
+                    '<button class="btn btn-sm" onclick="toggleOffer(' + o.id + ')"><i class="fa-solid ' + (o.active ? 'fa-pause' : 'fa-play') + '"></i></button> ' +
+                    '<button class="btn btn-sm" onclick="editOffer(' + o.id + ')"><i class="fa-solid fa-pen"></i></button> ' +
+                    '<button class="btn btn-sm btn-danger" onclick="delOffer(' + o.id + ')"><i class="fa-solid fa-trash"></i></button></td></tr>';
+            }).join('') || '<tr><td colspan="6" class="empty-state">لا توجد عروض</td></tr>';
+
+            const sel = document.getElementById('oProduct');
+            sel.innerHTML = '<option value="">— اختر منتجًا —</option>' + products.map(p => '<option value="' + p.id + '">' + p.name + '</option>').join('');
+        }
+
+        function openOfferModal() {
+            editingOid = null;
+            document.getElementById('offerModalTitle').textContent = 'عرض جديد';
+            document.getElementById('oProduct').value = '';
+            document.getElementById('oType').value = 'percent';
+            document.getElementById('oValue').value = '';
+            document.getElementById('oStart').value = UI.todayInput();
+            document.getElementById('oEnd').value = '';
+            document.getElementById('offerModal').style.visibility = 'visible';
+            document.getElementById('offerModal').style.opacity = '1';
+        }
+        function closeOfferModal() {
+            document.getElementById('offerModal').style.visibility = 'hidden';
+            document.getElementById('offerModal').style.opacity = '0';
+        }
+        async function editOffer(id) {
+            const o = await ARDB.getById('offers', id);
+            if (!o) return;
+            editingOid = id;
+            document.getElementById('offerModalTitle').textContent = 'تعديل العرض';
+            document.getElementById('oProduct').value = o.productId || '';
+            document.getElementById('oType').value = o.type || 'percent';
+            document.getElementById('oValue').value = o.value || '';
+            document.getElementById('oStart').value = o.start || '';
+            document.getElementById('oEnd').value = o.end || '';
+            document.getElementById('offerModal').style.visibility = 'visible';
+            document.getElementById('offerModal').style.opacity = '1';
+        }
+        async function saveOffer() {
+            const productId = Number(document.getElementById('oProduct').value);
+            if (!productId) { UI.toast('اختر المنتج', 'warn'); return; }
+            const value = Number(document.getElementById('oValue').value) || 0;
+            if (value <= 0) { UI.toast('أدخل قيمة صحيحة', 'warn'); return; }
+            const type = document.getElementById('oType').value;
+            if (type === 'percent' && value > 100) { UI.toast('النسبة المئوية لا تتجاوز 100%', 'warn'); return; }
+            const rec = {
+                productId, type, value,
+                start: document.getElementById('oStart').value,
+                end: document.getElementById('oEnd').value,
+                active: true,
+                createdAt: Date.now()
+            };
+            if (editingOid) {
+                const o = await ARDB.getById('offers', editingOid);
+                if (!o) return;
+                rec.id = editingOid; rec.active = o.active;
+                await ARDB.put('offers', rec);
+                UI.toast('تم التعديل', 'ok');
+            } else {
+                await ARDB.add('offers', rec);
+                UI.toast('تمت الإضافة', 'ok');
+            }
+            closeOfferModal(); load();
+        }
+        async function toggleOffer(id) {
+            const o = await ARDB.getById('offers', id);
+            if (!o) return;
+            o.active = !o.active;
+            await ARDB.put('offers', o);
+            UI.toast(o.active ? 'تم التفعيل' : 'تم الإيقاف', 'ok'); load();
+        }
+        async function delOffer(id) {
+            const ok = await UI.confirmBox('حذف العرض؟');
+            if (!ok) return;
+            await ARDB.remove('offers', id);
+            UI.toast('تم الحذف', 'ok'); load();
+        }
+        load();
+    </script>
+</body>
+</html>

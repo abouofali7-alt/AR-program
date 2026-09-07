@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>الحضور والانصراف — AR-Program</title>
+    <link rel="stylesheet" href="../../css/global.css">
+    <link rel="stylesheet" href="../../css/app.css">
+    <link rel="stylesheet" href="../../css/responsive.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
+</head>
+<body class="dark-mode">
+    <div id="appHeaderHost"></div>
+    <main class="pagewrap" style="padding:22px;max-width:1200px;margin:0 auto;">
+        <div class="page-head">
+            <div>
+                <h2>الحضور والانصراف</h2>
+                <div class="sub">تسجيل حضور اليوم</div>
+            </div>
+        </div>
+
+        <div class="form-grid" style="grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));">
+            <div class="form-item"><label>اختر اليوم</label><input type="date" id="attDate"></div>
+        </div>
+
+        <div class="table-card" id="attCard" style="display:none;">
+            <div class="table-head">الحضور — <span id="attDateLabel"></span></div>
+            <div class="table-scroll">
+                <table class="data-table">
+                    <thead><tr><th>الموظف</th><th>القسم</th><th>الحالة</th><th>وقت الدخول</th><th>وقت الخروج</th><th>ملاحظة</th></tr></thead>
+                    <tbody id="attBody"></tbody>
+                </table>
+            </div>
+        </div>
+    </main>
+
+    <script src="../../js/ui.js"></script>
+    <script src="../../js/db.js"></script>
+    <script src="../../js/app.js"></script>
+    <script>
+        async function load() {
+            const dateInput = document.getElementById('attDate');
+            dateInput.value = UI.todayInput();
+            dateInput.addEventListener('change', () => render());
+            await render();
+        }
+
+        async function render() {
+            const day = document.getElementById('attDate').value;
+            const [employees, departments, attendance] = await Promise.all([
+                ARDB.getAll('employees'), ARDB.getAll('departments'), ARDB.getAll('attendance')
+            ]);
+            const deptById = {}; departments.forEach(d => deptById[d.id] = d);
+            const dayRecords = {};
+            attendance.forEach(a => { if (a.date === day && a.employeeId) dayRecords[a.employeeId] = a; });
+
+            const card = document.getElementById('attCard');
+            document.getElementById('attDateLabel').textContent = day;
+            const body = document.getElementById('attBody');
+
+            if (!employees.length) { card.style.display = 'none'; return; }
+            card.style.display = 'block';
+
+            body.innerHTML = employees.map(e => {
+                const rec = dayRecords[e.id];
+                const statuses = [
+                    ['present', 'حاضر', 'badge-green'],
+                    ['late', 'متأخر', 'badge-amber'],
+                    ['absent', 'غائب', 'badge-red'],
+                    ['leave', 'إجازة', 'badge-blue']
+                ];
+                return '<tr>' +
+                    '<td><b>' + e.name + '</b></td>' +
+                    '<td>' + (e.departmentId && deptById[e.departmentId] ? deptById[e.departmentId].name : '—') + '</td>' +
+                    '<td><select class="att-status" data-emp="' + e.id + '" style="padding:7px;border-radius:8px;border:1px solid var(--border-color);background:var(--card-hover);color:var(--text-primary);">' +
+                    statuses.map(s => '<option value="' + s[0] + '"' + (rec && rec.status === s[0] ? ' selected' : '') + '>' + s[1] + '</option>').join('') + '</select></td>' +
+                    '<td><input type="time" class="att-in" data-emp="' + e.id + '" value="' + (rec && rec.checkIn || '') + '" style="padding:6px;border-radius:8px;border:1px solid var(--border-color);background:var(--card-hover);color:var(--text-primary);"></td>' +
+                    '<td><input type="time" class="att-out" data-emp="' + e.id + '" value="' + (rec && rec.checkOut || '') + '" style="padding:6px;border-radius:8px;border:1px solid var(--border-color);background:var(--card-hover);color:var(--text-primary);"></td>' +
+                    '<td style="display:flex;gap:6px;">' +
+                    '<button class="btn btn-sm btn-primary-soft save-att" data-emp="' + e.id + '"><i class="fa-solid fa-floppy-disk"></i> حفظ</button></td>' +
+                    '</tr>';
+            }).join('');
+        }
+
+        document.addEventListener('change', (ev) => {
+            if (ev.target.classList && ev.target.classList.contains('att-status') && ev.target.dataset.emp) {
+                autoSave(ev.target.dataset.emp);
+            }
+        });
+
+        async function autoSave(empId) {
+            const row = document.querySelector('select[data-emp="' + empId + '"]');
+            if (!row) return;
+            const status = row.value;
+            const checkIn = document.querySelector('.att-in[data-emp="' + empId + '"]').value;
+            const checkOut = document.querySelector('.att-out[data-emp="' + empId + '"]').value;
+            const day = document.getElementById('attDate').value;
+            const existing = (await ARDB.getByIndex('attendance', 'employeeId', Number(empId))).find(a => a.date === day);
+            const rec = { date: day, employeeId: Number(empId), status, checkIn, checkOut, updatedAt: Date.now() };
+            if (existing) { rec.id = existing.id; await ARDB.put('attendance', rec); }
+            else { await ARDB.add('attendance', rec); }
+            UI.toast('تم حفظ الحضور', 'ok');
+        }
+
+        document.addEventListener('click', (ev) => {
+            if (ev.target.closest('.save-att')) autoSave(ev.target.closest('.save-att').dataset.emp);
+        });
+
+        load();
+    </script>
+</body>
+</html>

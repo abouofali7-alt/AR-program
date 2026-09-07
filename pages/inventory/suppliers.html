@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>الموردون — AR-Program</title>
+    <link rel="stylesheet" href="../../css/global.css">
+    <link rel="stylesheet" href="../../css/app.css">
+    <link rel="stylesheet" href="../../css/responsive.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
+</head>
+<body class="dark-mode">
+    <div id="appHeaderHost"></div>
+    <main class="pagewrap" style="padding:22px;max-width:1100px;margin:0 auto;">
+        <div class="page-head">
+            <div>
+                <h2>الموردون</h2>
+                <div class="sub">إدارة سجل الموردين والأرصدة المستحقة</div>
+            </div>
+            <div class="page-actions" style="display:flex;gap:8px;">
+                <button class="btn btn-secondary" onclick="ARExport.tableToCSV('supTable', 'الموردون')"><i class="fa-solid fa-file-excel"></i> تصدير Excel</button>
+                <button class="btn btn-secondary" onclick="ARExport.printTable('supTable', 'جدول الموردين')"><i class="fa-solid fa-print"></i> طباعة</button>
+                <button class="btn btn-primary-soft" onclick="openSupModal()"><i class="fa-solid fa-plus"></i> إضافة مورد</button>
+            </div>
+        </div>
+
+        <div class="stat-grid" style="margin-bottom:18px;">
+            <div class="stat-card"><div class="label">إجمالي الموردين</div><div class="value cyan" id="supTotal">0</div></div>
+            <div class="stat-card"><div class="label">إجمالي المستحق للموردين</div><div class="value red" id="supBalance">0</div></div>
+        </div>
+
+        <div class="table-card">
+            <div class="table-head">الموردون</div>
+            <div class="table-scroll">
+                <table class="data-table" id="supTable">
+                    <thead><tr><th>الاسم</th><th>الهاتف</th><th>العنوان</th><th>الرصيد الافتتاحي</th><th>الرصيد الحالي</th><th></th></tr></thead>
+                    <tbody id="supBody"></tbody>
+                </table>
+            </div>
+        </div>
+    </main>
+
+    <div id="supModal" class="modal-mask" style="visibility:hidden;opacity:0;">
+        <div class="modal-box">
+            <h3 id="supModalTitle">إضافة مورد</h3>
+            <div class="form-grid">
+                <div class="form-item"><label>الاسم *</label><input id="sName"></div>
+                <div class="form-item"><label>الهاتف</label><input id="sPhone"></div>
+                <div class="form-item"><label>الرصيد الافتتاحي (دائن / له)</label><input type="number" id="sOpeningBalance" placeholder="0.00" step="0.01"></div>
+                <div class="form-item" style="grid-column:1/-1;"><label>العنوان</label><input id="sAddress"></div>
+                <div class="form-item" style="grid-column:1/-1;"><label>الملاحظات</label><input id="sNote"></div>
+            </div>
+            <div style="display:flex;gap:10px;justify-content:flex-end;">
+                <button class="btn btn-secondary" onclick="closeSupModal()">إلغاء</button>
+                <button class="btn btn-primary-soft" onclick="saveSup()">حفظ</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="../../js/ui.js"></script>
+    <script src="../../js/db.js"></script>
+    <script src="../../js/export.js"></script>
+    <script src="../../js/app.js"></script>
+    <script>
+        let editingSid = null;
+        async function load() {
+            const [sups, purchases, payments, returns] = await Promise.all([
+                ARDB.getAll('suppliers'),
+                ARDB.getAll('purchases'),
+                ARDB.getAll('payments'),
+                ARDB.getAll('purchaseReturns')
+            ]);
+
+            const purMap = {};
+            purchases.forEach(p => { if (p.supplierId) purMap[p.supplierId] = (purMap[p.supplierId] || 0) + (p.total || 0); });
+
+            const retMap = {};
+            (returns || []).forEach(r => { if (r.supplierId) retMap[r.supplierId] = (retMap[r.supplierId] || 0) + (r.total || 0); });
+
+            const payMap = {};
+            payments.forEach(p => {
+                if ((p.type === 'payment' || p.partyType === 'supplier') && p.partyId) {
+                    payMap[p.partyId] = (payMap[p.partyId] || 0) + (p.amount || 0);
+                }
+            });
+
+            let grandTotalPayable = 0;
+            document.getElementById('supTotal').textContent = sups.length;
+
+            document.getElementById('supBody').innerHTML = sups.map(s => {
+                const openBal = Number(s.openingBalance || 0);
+                const purBal = Number(purMap[s.id] || 0);
+                const retBal = Number(retMap[s.id] || 0);
+                const payBal = Number(payMap[s.id] || 0);
+                const currentBal = openBal + purBal - retBal - payBal;
+                grandTotalPayable += currentBal;
+
+                return '<tr><td><b>' + s.name + '</b></td>' +
+                '<td class="num">' + (s.phone || '—') + '</td>' +
+                '<td>' + (s.address || '—') + '</td>' +
+                '<td class="num">' + UI.money(openBal) + '</td>' +
+                '<td class="num" style="font-weight:700;color:' + (currentBal > 0 ? 'var(--danger)' : 'var(--text-primary)') + ';">' + UI.money(currentBal) + '</td>' +
+                '<td style="text-align:left;white-space:nowrap;">' +
+                '<button class="btn btn-sm" onclick="editSup(' + s.id + ')"><i class="fa-solid fa-pen"></i></button> ' +
+                '<button class="btn btn-sm btn-danger" onclick="delSup(' + s.id + ')"><i class="fa-solid fa-trash"></i></button></td></tr>';
+            }).join('') || '<tr><td colspan="6" class="empty-state">لا يوجد موردون</td></tr>';
+
+            document.getElementById('supBalance').innerHTML = UI.money(grandTotalPayable);
+        }
+
+        function openSupModal() {
+            editingSid = null;
+            document.getElementById('supModalTitle').textContent = 'إضافة مورد';
+            ['sName','sPhone','sOpeningBalance','sAddress','sNote'].forEach(i => document.getElementById(i).value = '');
+            document.getElementById('supModal').style.visibility = 'visible';
+            document.getElementById('supModal').style.opacity = '1';
+        }
+        function closeSupModal() {
+            document.getElementById('supModal').style.visibility = 'hidden';
+            document.getElementById('supModal').style.opacity = '0';
+        }
+        async function editSup(id) {
+            const s = await ARDB.getById('suppliers', id);
+            if (!s) return;
+            editingSid = id;
+            document.getElementById('supModalTitle').textContent = 'تعديل مورد';
+            document.getElementById('sName').value = s.name || '';
+            document.getElementById('sPhone').value = s.phone || '';
+            document.getElementById('sOpeningBalance').value = s.openingBalance || 0;
+            document.getElementById('sAddress').value = s.address || '';
+            document.getElementById('sNote').value = s.note || '';
+            document.getElementById('supModal').style.visibility = 'visible';
+            document.getElementById('supModal').style.opacity = '1';
+        }
+        async function saveSup() {
+            const name = document.getElementById('sName').value.trim();
+            if (!name) { UI.toast('الاسم مطلوب', 'warn'); return; }
+            const rec = {
+                name,
+                phone: document.getElementById('sPhone').value.trim(),
+                address: document.getElementById('sAddress').value.trim(),
+                openingBalance: Number(document.getElementById('sOpeningBalance').value) || 0,
+                note: document.getElementById('sNote').value.trim()
+            };
+            if (editingSid) { rec.id = editingSid; await ARDB.put('suppliers', rec); UI.toast('تم التعديل', 'ok'); }
+            else { await ARDB.add('suppliers', rec); UI.toast('تمت الإضافة', 'ok'); }
+            closeSupModal(); load();
+        }
+        async function delSup(id) {
+            const ok = await UI.confirmBox('حذف المورد؟');
+            if (!ok) return;
+            await ARDB.remove('suppliers', id);
+            UI.toast('تم الحذف', 'ok'); load();
+        }
+        load();
+    </script>
+</body>
+</html>

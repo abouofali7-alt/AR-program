@@ -1,0 +1,156 @@
+/* ===== نماذج الإدخال والتسجيل ===== */
+.transfer-container {
+    padding: 30px;
+    max-width: 900px;
+    margin: 0 auto;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.transfer-container h2 {
+    color: var(--accent-cyan);
+    margin-bottom: 2px;
+    font-size: 1.4rem;
+}
+
+.subtitle-desc {
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+    margin-bottom: 10px;
+}
+
+.transfer-form-card {
+    background-color: var(--card-dark);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+}
+
+.transfer-form-card h3 {
+    color: var(--accent-cyan);
+    font-size: 1.05rem;
+}
+
+.form-row {
+    display: flex;
+    gap: 15px;
+    flex-wrap: wrap;
+}
+
+.form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    flex: 1;
+    min-width: 200px;
+}
+
+.form-group label {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    font-weight: 500;
+}
+
+.form-input, .form-select {
+    background: var(--bg-dark);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 10px 14px;
+    color: var(--text-primary);
+    font-family: inherit;
+    font-size: 0.95rem;
+    outline: none;
+    transition: border-color 0.3s, box-shadow 0.3s;
+}
+
+.form-input:focus, .form-select:focus {
+    border-color: var(--accent-cyan);
+    box-shadow: 0 0 0 3px rgba(129, 140, 248, 0.18);
+}
+
+.action-btn {
+    background: linear-gradient(135deg, var(--accent-cyan), var(--accent-blue));
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    padding: 0 20px;
+    height: 42px;
+    font-weight: bold;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    transition: opacity 0.2s, transform 0.1s;
+}
+
+.action-btn:hover {
+    opacity: 0.9;
+    transform: translateY(-1px);
+}
+
+.submit-section {
+    display: flex;
+    justify-content: flex-end;
+}
+
+.confirm-btn {
+    background: linear-gradient(135deg, var(--accent-cyan), var(--accent-pink));
+    color: #fff;
+    border: none;
+    padding: 12px 25px;
+    border-radius: 8px;
+    font-size: 1rem;
+    font-weight: bold;
+    cursor: pointer;
+    transition: opacity 0.2s;
+}
+
+.confirm-btn:hover {
+    opacity: 0.9;
+}
+
+.table-card {
+    background: var(--card-dark);
+    border: 1px solid var(--card-border);
+    border-radius: 12px;
+    overflow-x: auto;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+}
+
+.table-card table {
+    width: 100%;
+    border-collapse: collapse;
+    text-align: right;
+}
+
+.table-card th {
+    background: rgba(148, 163, 184, 0.08);
+    color: var(--accent-cyan);
+    font-size: 0.85rem;
+    padding: 14px 18px;
+    border-bottom: 1px solid var(--border-color);
+    white-space: nowrap;
+}
+
+.table-card td {
+    padding: 14px 18px;
+    border-bottom: 1px solid rgba(148, 163, 184, 0.12);
+    font-size: 0.9rem;
+    color: var(--text-primary);
+}
+
+.table-card tbody tr:hover {
+    background: rgba(129, 140, 248, 0.06);
+}
+
+body.light-mode .table-card th {
+    background: var(--header2-bg);
+    color: var(--accent-cyan);
+}
+

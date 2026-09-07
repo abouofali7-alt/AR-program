@@ -1,0 +1,166 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>المستخدمون — AR-Program</title>
+    <link rel="stylesheet" href="../../css/global.css">
+    <link rel="stylesheet" href="../../css/app.css">
+    <link rel="stylesheet" href="../../css/responsive.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
+</head>
+<body class="dark-mode">
+    <div id="appHeaderHost"></div>
+    <main class="pagewrap" style="padding:22px;max-width:1200px;margin:0 auto;">
+        <div class="page-head">
+            <div>
+                <h2>المستخدمون</h2>
+                <div class="sub">إدارة حسابات الدخول وصلاحياتها</div>
+            </div>
+            <div class="page-actions">
+                <button class="btn btn-primary-soft" onclick="openUserModal()"><i class="fa-solid fa-user-plus"></i> مستخدم جديد</button>
+            </div>
+        </div>
+        <div class="table-card">
+            <div class="table-head">المستخدمون</div>
+            <div class="table-scroll">
+                <table class="data-table">
+                    <thead><tr><th>اسم المستخدم</th><th>الاسم</th><th>الدور</th><th>الحالة</th><th></th></tr></thead>
+                    <tbody id="userBody"></tbody>
+                </table>
+            </div>
+        </div>
+    </main>
+
+    <div id="userModal" class="modal-mask" style="visibility:hidden;opacity:0;">
+        <div class="modal-box">
+            <h3 id="userModalTitle">مستخدم جديد</h3>
+            <div class="form-grid">
+                <div class="form-item"><label>اسم المستخدم</label><input id="uUsername" autocomplete="off"></div>
+                <div class="form-item"><label>الاسم الكامل</label><input id="uName"></div>
+                <div class="form-item"><label>كلمة السر</label><input type="password" id="uPassword" autocomplete="new-password"></div>
+                <div class="form-item"><label>الدور</label><select id="uRole"></select></div>
+            </div>
+            <div style="display:flex;gap:10px;justify-content:flex-end;">
+                <button class="btn btn-secondary" onclick="closeUserModal()">إلغاء</button>
+                <button class="btn btn-primary-soft" onclick="saveUser()">حفظ</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="../../js/ui.js"></script>
+    <script src="../../js/db.js"></script>
+    <script src="../../js/app.js"></script>
+    <script>
+        let editingUid = null;
+
+        async function load() {
+            const [users, roles] = await Promise.all([ARDB.getAll('users'), ARDB.getAll('roles')]);
+            const roleById = {}; roles.forEach(r => roleById[r.id] = r);
+            const me = ARDB.currentUser();
+
+            document.getElementById('userBody').innerHTML = users.map(u => {
+                const isMe = me && me.id === u.id;
+                return '<tr>' +
+                    '<td><b>' + u.username + '</b>' + (isMe ? ' <span class="badge badge-blue">أنت</span>' : '') + '</td>' +
+                    '<td>' + (u.name || '—') + '</td>' +
+                    '<td>' + (roleById[u.roleId] ? roleById[u.roleId].name : u.roleName || '—') + '</td>' +
+                    '<td>' + (u.active === false ? '<span class="badge badge-red">معطل</span>' : '<span class="badge badge-green">نشط</span>') + '</td>' +
+                    '<td style="text-align:left;white-space:nowrap;">' +
+                    '<button class="btn btn-sm" onclick="editUser(' + u.id + ')"><i class="fa-solid fa-pen"></i></button> ' +
+                    (u.active === false
+                        ? '<button class="btn btn-sm" onclick="toggleUser(' + u.id + ',true)"><i class="fa-solid fa-user-check"></i></button> '
+                        : '<button class="btn btn-sm btn-amber" onclick="toggleUser(' + u.id + ',false)"><i class="fa-solid fa-user-slash"></i></button> ') +
+                    (u.id !== 1 && u.username !== 'admin' ? '<button class="btn btn-sm btn-danger" onclick="delUser(' + u.id + ')"><i class="fa-solid fa-trash"></i></button>' : '') +
+                    '</td></tr>';
+            }).join('') || '<tr><td colspan="5" class="empty-state">لا يوجد مستخدمون</td></tr>';
+        }
+
+        function openUserModal() {
+            editingUid = null;
+            document.getElementById('userModalTitle').textContent = 'مستخدم جديد';
+            document.getElementById('uUsername').value = '';
+            document.getElementById('uName').value = '';
+            document.getElementById('uPassword').value = '';
+            fillRoles();
+            document.getElementById('userModal').style.visibility = 'visible';
+            document.getElementById('userModal').style.opacity = '1';
+        }
+        function closeUserModal() {
+            document.getElementById('userModal').style.visibility = 'hidden';
+            document.getElementById('userModal').style.opacity = '0';
+        }
+        async function fillRoles() {
+            const roles = await ARDB.getAll('roles');
+            const sel = document.getElementById('uRole');
+            sel.innerHTML = roles.map(r => '<option value="' + r.id + '">' + r.name + '</option>').join('');
+        }
+        async function editUser(id) {
+            const u = await ARDB.getById('users', id);
+            if (!u) return;
+            editingUid = id;
+            document.getElementById('userModalTitle').textContent = 'تعديل: ' + u.username;
+            document.getElementById('uUsername').value = u.username;
+            document.getElementById('uName').value = u.name || '';
+            document.getElementById('uPassword').value = '';
+            document.getElementById('uPassword').placeholder = 'اتركه فارغًا دون تغيير';
+            await fillRoles();
+            document.getElementById('uRole').value = u.roleId || 1;
+            document.getElementById('userModal').style.visibility = 'visible';
+            document.getElementById('userModal').style.opacity = '1';
+        }
+        async function saveUser() {
+            const username = document.getElementById('uUsername').value.trim();
+            const name = document.getElementById('uName').value.trim();
+            const password = document.getElementById('uPassword').value;
+            const roleId = Number(document.getElementById('uRole').value);
+
+            if (!username) { UI.toast('اسم المستخدم مطلوب', 'warn'); return; }
+            if (!editingUid && !password) { UI.toast('كلمة السر مطلوبة', 'warn'); return; }
+
+            const roles = await ARDB.getAll('roles');
+            const role = roles.find(r => r.id === roleId);
+            const roleName = role ? role.name : '';
+
+            const allUsers = await ARDB.getAll('users');
+            const dup = allUsers.find(u => u.username.toLowerCase() === username.toLowerCase() && u.id !== editingUid);
+            if (dup) { UI.toast('اسم المستخدم مستخدم بالفعل', 'error'); return; }
+
+            if (editingUid) {
+                const u = await ARDB.getById('users', editingUid);
+                if (!u) return;
+                u.username = username;
+                u.name = name;
+                u.roleId = roleId;
+                u.roleName = roleName;
+                if (password) u.password = ARDB.hashPassword(password);
+                await ARDB.put('users', u);
+                UI.toast('تم التعديل', 'ok');
+            } else {
+                await ARDB.add('users', { username, name, password: ARDB.hashPassword(password), roleId, roleName, active: true, createdAt: Date.now() });
+                UI.toast('تمت الإضافة', 'ok');
+            }
+            closeUserModal(); load();
+        }
+        async function toggleUser(id, active) {
+            const u = await ARDB.getById('users', id);
+            if (!u) return;
+            const me = ARDB.currentUser();
+            if (me && me.id === id && !active) { UI.toast('لا يمكنك تعطيل نفسك', 'warn'); return; }
+            u.active = active;
+            await ARDB.put('users', u);
+            UI.toast(active ? 'تم التفعيل' : 'تم التعطيل', 'ok'); load();
+        }
+        async function delUser(id) {
+            const u = await ARDB.getById('users', id);
+            if (!u) return;
+            if (u.id === 1 || u.username === 'admin') { UI.toast('لا يمكن حذف المدير الرئيسي', 'warn'); return; }
+            const ok = await UI.confirmBox('حذف المستخدم ' + u.username + '؟');
+            if (!ok) return;
+            await ARDB.remove('users', id);
+            UI.toast('تم الحذف', 'ok'); load();
+        }
+        load();
+    </script>
+</body>
+</html>

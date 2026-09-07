@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ميزان المراجعة — AR-Program</title>
+    <link rel="stylesheet" href="../../css/global.css">
+    <link rel="stylesheet" href="../../css/app.css">
+    <link rel="stylesheet" href="../../css/responsive.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
+</head>
+<body class="dark-mode">
+    <div id="appHeaderHost"></div>
+    <main class="pagewrap" style="padding:22px;max-width:1200px;margin:0 auto;">
+        <div class="page-head">
+            <div>
+                <h2>ميزان المراجعة</h2>
+                <div class="sub">مجموع الأرصدة المدينة والدائنة لكل حساب</div>
+            </div>
+        </div>
+        <div class="table-card">
+            <div class="table-head">ميزان المراجعة</div>
+            <div class="table-scroll">
+                <table class="data-table">
+                    <thead><tr><th>الكود</th><th>الحساب</th><th>مدين</th><th>دائن</th></tr></thead>
+                    <tbody id="tbBody"></tbody>
+                    <tfoot id="tbFoot"></tfoot>
+                </table>
+            </div>
+        </div>
+    </main>
+
+    <script src="../../js/ui.js"></script>
+    <script src="../../js/db.js"></script>
+    <script src="../../js/app.js"></script>
+    <script>
+        async function load() {
+            const [accounts, entries] = await Promise.all([ARDB.getAll('accounts'), ARDB.getAll('journalEntries')]);
+            const totals = {};
+            entries.forEach(en => (en.lines || []).forEach(l => {
+                if (!totals[l.accountId]) totals[l.accountId] = { dr: 0, cr: 0 };
+                totals[l.accountId].dr += (l.debit || 0);
+                totals[l.accountId].cr += (l.credit || 0);
+            }));
+            const rows = accounts.map(a => ({
+                a,
+                dr: Math.max((totals[a.id] && totals[a.id].dr || 0) - (totals[a.id] && totals[a.id].cr || 0), 0),
+                cr: Math.max((totals[a.id] && totals[a.id].cr || 0) - (totals[a.id] && totals[a.id].dr || 0), 0)
+            }));
+            const sumDr = rows.reduce((s, r) => s + r.dr, 0);
+            const sumCr = rows.reduce((s, r) => s + r.cr, 0);
+            const body = document.getElementById('tbBody');
+            body.innerHTML = rows.map(r =>
+                '<tr><td class="num">' + r.a.code + '</td><td>' + r.a.name + '</td>' +
+                '<td class="num">' + UI.money(r.dr) + '</td><td class="num">' + UI.money(r.cr) + '</td></tr>'
+            ).join('');
+            const balanced = Math.abs(sumDr - sumCr) < 0.01;
+            document.getElementById('tbFoot').innerHTML =
+                '<tr style="background:var(--card-hover);font-weight:800;">' +
+                '<td colspan="2">المجموع' + (balanced ? ' <span class="badge badge-green">متوازن</span>' : ' <span class="badge badge-red">غير متوازن</span>') + '</td>' +
+                '<td class="num">' + UI.money(sumDr) + '</td><td class="num">' + UI.money(sumCr) + '</td></tr>';
+        }
+        load();
+    </script>
+</body>
+</html>

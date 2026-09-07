@@ -1,0 +1,164 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>تقرير المبيعات — AR-Program</title>
+    <link rel="stylesheet" href="../../css/global.css">
+    <link rel="stylesheet" href="../../css/app.css">
+    <link rel="stylesheet" href="../../css/responsive.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
+</head>
+<body class="dark-mode">
+    <div id="appHeaderHost"></div>
+    <main class="pagewrap" style="padding:22px;max-width:1200px;margin:0 auto;">
+        <div class="page-head">
+            <div>
+                <h2>تقرير المبيعات</h2>
+                <div class="sub">تحليل المبيعات حسب المنتج والعميل مع الفترة</div>
+            </div>
+        </div>
+
+        <div class="table-card" style="margin-bottom:16px;padding:16px;">
+            <div class="form-grid" style="grid-template-columns:repeat(auto-fit,minmax(180px,1fr));">
+                <div class="form-item"><label>من تاريخ</label><input type="date" id="repFrom"></div>
+                <div class="form-item"><label>إلى تاريخ</label><input type="date" id="repTo"></div>
+                <div class="form-item"><label>العميل</label><select id="repCustomer"><option value="">الكل</option></select></div>
+                <div class="form-item"><label>المنتج</label><select id="repProduct"><option value="">الكل</option></select></div>
+                <div class="form-item" style="display:flex;align-items:flex-end;"><button class="btn btn-primary-soft" onclick="loadReport()"><i class="fa-solid fa-filter"></i> عرض التقرير</button></div>
+            </div>
+        </div>
+
+        <div class="stat-grid">
+            <div class="stat-card"><div class="label">إجمالي المبيعات (صافي)</div><div class="value green" id="repNet">0.00</div></div>
+            <div class="stat-card"><div class="label">إجمالي الفواتير</div><div class="value cyan" id="repCount">0</div></div>
+            <div class="stat-card"><div class="label">كمية الأصناف المباعة</div><div class="value purple" id="repQty">0</div></div>
+            <div class="stat-card"><div class="label">قيمة المرتجعات</div><div class="value red" id="repReturns">0.00</div></div>
+        </div>
+
+        <div class="table-card">
+            <div class="table-head">المبيعات حسب المنتج</div>
+            <div class="table-scroll">
+                <table class="data-table">
+                    <thead><tr><th>المنتج</th><th>الكمية المباعة</th><th>المبيعات</th></tr></thead>
+                    <tbody id="repByProdBody"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="table-card" style="margin-top:16px;">
+            <div class="table-head">المبيعات حسب العميل</div>
+            <div class="table-scroll">
+                <table class="data-table">
+                    <thead><tr><th>العميل</th><th>عدد الفواتير</th><th>الإجمالي</th></tr></thead>
+                    <tbody id="repByCustBody"></tbody>
+                </table>
+            </div>
+        </div>
+    </main>
+
+    <script src="../../js/ui.js"></script>
+    <script src="../../js/db.js"></script>
+    <script src="../../js/app.js"></script>
+    <script>
+        function dayFrom(str) { return new Date(str + 'T12:00:00').getTime(); }
+
+        async function load() {
+            const [customers, products] = await Promise.all([ARDB.getAll('customers'), ARDB.getAll('products')]);
+            document.getElementById('repCustomer').innerHTML = '<option value="">الكل</option>' + customers.map(c => '<option value="' + c.id + '">' + c.name + '</option>').join('');
+            document.getElementById('repProduct').innerHTML = '<option value="">الكل</option>' + products.map(p => '<option value="' + p.id + '">' + p.name + '</option>').join('');
+            const d = new Date();
+            function localDateStr(d) { return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
+            document.getElementById('repTo').value = UI.todayInput();
+            const first = new Date(d.getFullYear(), d.getMonth(), 1);
+            document.getElementById('repFrom').value = localDateStr(first);
+            loadReport();
+        }
+
+        async function loadReport() {
+            const fStr = document.getElementById('repFrom').value;
+            const tStr = document.getElementById('repTo').value;
+            if (!fStr || !tStr) { UI.toast('حدد الفترة', 'warn'); return; }
+            const from = dayFrom(fStr);
+            const to = dayFrom(tStr);
+            const custF = Number(document.getElementById('repCustomer').value) || null;
+            const prodF = Number(document.getElementById('repProduct').value) || null;
+
+            const [invoices, returns, products, customers] = await Promise.all([
+                ARDB.getAll('invoices'), ARDB.getAll('invoiceReturns'), ARDB.getAll('products'), ARDB.getAll('customers')
+            ]);
+            const pById = {}; products.forEach(p => pById[p.id] = p);
+            const cById = {}; customers.forEach(c => cById[c.id] = c);
+
+            const list = invoices.filter(i => {
+                if (i.date < from || i.date > to) return false;
+                if (custF && i.customerId !== custF) return false;
+                if (prodF && !i.items.some(it => it.productId === prodF)) return false;
+                return true;
+            });
+
+            const prodMap = {};
+            let count = 0, net = 0, qtyTotal = 0;
+            list.forEach(inv => {
+                count++;
+                const invTotal = inv.items.reduce((s, it) => {
+                    if (prodF && it.productId !== prodF) return s;
+                    const pid = it.productId;
+                    if (!prodMap[pid]) prodMap[pid] = { name: (pById[pid] ? pById[pid].name : 'صنف ' + pid), qty: 0, amount: 0, returns: 0, retAmt: 0 };
+                    prodMap[pid].qty += it.quantity;
+                    prodMap[pid].amount += it.total;
+                    qtyTotal += it.quantity;
+                    return s + it.total;
+                }, 0);
+                net += invTotal;
+            });
+
+            const retList = returns.filter(r => {
+                if (r.date < from || r.date > to) return false;
+                if (prodF && !r.items.some(it => it.productId === prodF)) return false;
+                return true;
+            });
+            let retTotal = 0;
+            retList.forEach(r => {
+                r.items.forEach(it => {
+                    if (prodF && it.productId !== prodF) return;
+                    if (prodMap[it.productId]) {
+                        prodMap[it.productId].returns += it.quantity;
+                        prodMap[it.productId].retAmt += it.total;
+                    }
+                    retTotal += it.total;
+                });
+            });
+
+            document.getElementById('repNet').innerHTML = UI.money(net - retTotal);
+            document.getElementById('repCount').textContent = count;
+            document.getElementById('repQty').textContent = qtyTotal;
+            document.getElementById('repReturns').innerHTML = UI.money(retTotal);
+
+            document.getElementById('repByProdBody').innerHTML = Object.keys(prodMap).map(pid => {
+                const p = prodMap[pid];
+                return '<tr><td><b>' + p.name + '</b></td>' +
+                    '<td class="num">' + (p.qty - p.returns) + (p.returns ? ' <span class="badge badge-red">مرتجع ' + p.returns + '</span>' : '') + '</td>' +
+                    '<td class="num" style="font-weight:700;color:var(--success);">' + UI.money(p.amount - p.retAmt) + '</td></tr>';
+            }).join('') || '<tr><td colspan="3" class="empty-state">لا توجد مبيعات في الفترة المحددة</td></tr>';
+
+            const custMap = {};
+            list.forEach(inv => {
+                const cid = inv.customerId;
+                if (!custMap[cid]) custMap[cid] = { name: cid && cById[cid] ? cById[cid].name : 'بدون عميل', count: 0, amount: 0 };
+                custMap[cid].count++;
+                custMap[cid].amount += inv.total;
+            });
+            retList.forEach(r => {
+                if (custMap[r.customerId]) custMap[r.customerId].amount -= r.total;
+            });
+            document.getElementById('repByCustBody').innerHTML = Object.keys(custMap).map(cid => {
+                const c = custMap[cid];
+                return '<tr><td><b>' + c.name + '</b></td><td class="num">' + c.count + '</td>' +
+                    '<td class="num" style="font-weight:700;color:var(--success);">' + UI.money(c.amount) + '</td></tr>';
+            }).join('') || '<tr><td colspan="3" class="empty-state">لا توجد بيانات</td></tr>';
+        }
+        load();
+    </script>
+</body>
+</html>

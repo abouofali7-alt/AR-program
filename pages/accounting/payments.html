@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>الدفعات والتحصيلات — AR-Program</title>
+    <link rel="stylesheet" href="../../css/global.css">
+    <link rel="stylesheet" href="../../css/app.css">
+    <link rel="stylesheet" href="../../css/responsive.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
+</head>
+<body class="dark-mode">
+    <div id="appHeaderHost"></div>
+    <main class="pagewrap" style="padding:22px;max-width:1200px;margin:0 auto;">
+        <div class="page-head">
+            <div>
+                <h2>الدفعات والتحصيلات</h2>
+                <div class="sub">قبض من العملاء وسداد للموردين</div>
+            </div>
+            <div class="page-actions">
+                <button class="btn btn-primary-soft" onclick="openPayModal()"><i class="fa-solid fa-plus"></i> دفعة جديدة</button>
+            </div>
+        </div>
+        <div class="stat-grid">
+            <div class="stat-card"><div class="label">إجمالي المقبوضات</div><div class="value green" id="payIn">0.00</div></div>
+            <div class="stat-card"><div class="label">إجمالي المدفوعات</div><div class="value red" id="payOut">0.00</div></div>
+            <div class="stat-card"><div class="label">الصافي</div><div class="value cyan" id="payNet">0.00</div></div>
+        </div>
+        <div class="table-card">
+            <div class="table-head">سجل الدفعات</div>
+            <div class="table-scroll">
+                <table class="data-table">
+                    <thead><tr><th>التاريخ</th><th>النوع</th><th>الطرف</th><th>البيان</th><th>المبلغ</th><th></th></tr></thead>
+                    <tbody id="payBody"></tbody>
+                </table>
+            </div>
+        </div>
+    </main>
+
+    <div id="payModal" class="modal-mask" style="visibility:hidden;opacity:0;">
+        <div class="modal-box">
+            <h3>دفعة جديدة</h3>
+            <div class="form-grid">
+                <div class="form-item"><label>التاريخ</label><input type="date" id="payDate"></div>
+                <div class="form-item"><label>النوع</label>
+                    <select id="payType" onchange="fillParty()"><option value="receipt">قبض من عميل</option><option value="payment">سداد لمورد</option></select>
+                </div>
+                <div class="form-item"><label>الطرف</label><select id="payParty"></select></div>
+                <div class="form-item"><label>المبلغ</label><input type="number" id="payAmount" step="0.01" min="0"></div>
+                <div class="form-item" style="grid-column:1/-1;"><label>البيان</label><input id="payNote"></div>
+            </div>
+            <div style="display:flex;gap:10px;justify-content:flex-end;">
+                <button class="btn btn-secondary" onclick="closePayModal()">إلغاء</button>
+                <button class="btn btn-primary-soft" onclick="savePay()">حفظ الدفعة</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="../../js/ui.js"></script>
+    <script src="../../js/db.js"></script>
+    <script src="../../js/app.js"></script>
+    <script>
+        async function load() {
+            const [pays, customers, suppliers] = await Promise.all([ARDB.getAll('payments'), ARDB.getAll('customers'), ARDB.getAll('suppliers')]);
+            const cs = {}; customers.forEach(c => cs['c' + c.id] = c.name);
+            const sp = {}; suppliers.forEach(s => sp['s' + s.id] = s.name);
+
+            const sorted = pays.sort((a, b) => (b.date || 0) - (a.date || 0));
+            let pIn = 0, pOut = 0;
+            sorted.forEach(p => { if (p.type === 'receipt') pIn += p.amount || 0; else pOut += p.amount || 0; });
+            document.getElementById('payIn').innerHTML = UI.money(pIn);
+            document.getElementById('payOut').innerHTML = UI.money(pOut);
+            document.getElementById('payNet').innerHTML = UI.money(pIn - pOut);
+
+            document.getElementById('payBody').innerHTML = sorted.map(p => {
+                const name = p.partyType === 'customer' ? (cs['c' + p.partyId] || '—') : (sp['s' + p.partyId] || '—');
+                const isRec = p.type === 'receipt';
+                return '<tr><td>' + UI.date(p.date) + '</td>' +
+                    '<td><span class="badge ' + (isRec ? 'badge-green' : 'badge-red') + '">' + (isRec ? 'قبض' : 'دفع') + '</span></td>' +
+                    '<td>' + name + '</td>' +
+                    '<td>' + (p.note || '—') + '</td>' +
+                    '<td class="num" style="font-weight:700;color:' + (isRec ? 'var(--success);' : 'var(--danger);') + '">' + (isRec ? '+' : '−') + ' ' + UI.money(p.amount) + '</td>' +
+                    '<td style="text-align:left;"><button class="btn btn-sm btn-danger" onclick="delPay(' + p.id + ')"><i class="fa-solid fa-trash"></i></button></td></tr>';
+            }).join('') || '<tr><td colspan="6" class="empty-state">لا توجد دفعات</td></tr>';
+            fillParty();
+        }
+
+        async function fillParty() {
+            const type = document.getElementById('payType').value;
+            const list = type === 'receipt' ? await ARDB.getAll('customers') : await ARDB.getAll('suppliers');
+            const sel = document.getElementById('payParty');
+            sel.innerHTML = '<option value="">— اختر —</option>' + list.map(x => '<option value="' + x.id + '">' + x.name + '</option>').join('');
+        }
+
+        function openPayModal() {
+            document.getElementById('payModal').style.visibility = 'visible';
+            document.getElementById('payModal').style.opacity = '1';
+            document.getElementById('payDate').value = UI.todayInput();
+            document.getElementById('payAmount').value = '';
+            document.getElementById('payNote').value = '';
+            fillParty();
+        }
+        function closePayModal() {
+            document.getElementById('payModal').style.visibility = 'hidden';
+            document.getElementById('payModal').style.opacity = '0';
+        }
+
+        async function savePay() {
+            const date = new Date(document.getElementById('payDate').value + 'T12:00:00').getTime();
+            const type = document.getElementById('payType').value;
+            const partyId = Number(document.getElementById('payParty').value);
+            const amount = Number(document.getElementById('payAmount').value) || 0;
+            const note = document.getElementById('payNote').value.trim();
+            if (!partyId) { UI.toast('اختر الطرف', 'warn'); return; }
+            if (amount <= 0) { UI.toast('أدخل مبلغًا صحيحًا', 'warn'); return; }
+
+            await ARDB.add('payments', { date, type, partyType: type === 'receipt' ? 'customer' : 'supplier', partyId, amount, note, createdAt: Date.now() });
+
+            // قيد اليومية: قبض = خصم الصندوق / دائن العملاء، دفع = خصم الموردين / دائن الصندوق
+            const accPayable = 4;  // حسابات العملاء
+            const accReceivable = 7; // حسابات الموردين
+            const cashAcc = 3;
+            const lines = type === 'receipt'
+                ? [{ accountId: cashAcc, debit: amount, credit: 0 }, { accountId: accPayable, debit: 0, credit: amount }]
+                : [{ accountId: accReceivable, debit: amount, credit: 0 }, { accountId: cashAcc, debit: 0, credit: amount }];
+            await ARDB.add('journalEntries', {
+                number: await ARDB.nextSeq('journalAuto', 'JRN-', 6),
+                date, desc: (type === 'receipt' ? 'تحصيل من عميل' : 'سداد لمورد') + (note ? ': ' + note : ''),
+                lines
+            });
+
+            UI.toast('تم حفظ الدفعة', 'ok');
+            closePayModal(); load();
+        }
+        async function delPay(id) {
+            const ok = await UI.confirmBox('حذف الدفعة؟');
+            if (!ok) return;
+            await ARDB.remove('payments', id);
+            UI.toast('تم الحذف', 'ok'); load();
+        }
+        load();
+    </script>
+</body>
+</html>

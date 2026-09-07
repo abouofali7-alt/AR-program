@@ -1,0 +1,206 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>فواتير الشراء — AR-Program</title>
+    <link rel="stylesheet" href="../../css/global.css">
+    <link rel="stylesheet" href="../../css/app.css">
+    <link rel="stylesheet" href="../../css/responsive.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
+</head>
+<body class="dark-mode">
+    <div id="appHeaderHost"></div>
+    <main class="pagewrap" style="padding:22px;max-width:1200px;margin:0 auto;">
+        <div class="page-head">
+            <div>
+                <h2>فواتير الشراء</h2>
+                <div class="sub">سجل مشتريات الموردين</div>
+            </div>
+            <div class="page-actions">
+                <button class="btn btn-primary-soft" onclick="openPurModal()"><i class="fa-solid fa-plus"></i> فاتورة شراء</button>
+            </div>
+        </div>
+        <div class="table-card">
+            <div class="table-head">فواتير الشراء</div>
+            <div class="table-scroll">
+                <table class="data-table">
+                    <thead><tr><th>الرقم</th><th>التاريخ</th><th>المورد</th><th>عدد الأصناف</th><th>طريقة الدفع</th><th>الإجمالي</th><th></th></tr></thead>
+                    <tbody id="purBody"></tbody>
+                </table>
+            </div>
+        </div>
+    </main>
+
+    <div id="purModal" class="modal-mask" style="visibility:hidden;opacity:0;">
+        <div class="modal-box" style="width:min(760px,94vw);">
+            <h3>فاتورة شراء جديدة</h3>
+            <div class="form-grid">
+                <div class="form-item"><label>التاريخ</label><input type="date" id="purDate"></div>
+                <div class="form-item"><label>المورد</label><select id="purSupplier"></select></div>
+                <div class="form-item"><label>طريقة الدفع</label>
+                    <select id="purPayType">
+                        <option value="credit">آجل (على الحساب)</option>
+                        <option value="cash">نقداً (كاش)</option>
+                    </select>
+                </div>
+                <div class="form-item"><label>ملاحظة</label><input id="purNote"></div>
+            </div>
+            <div style="margin-bottom:10px;"><button class="btn btn-sm" onclick="addPurLine()"><i class="fa-solid fa-plus"></i> إضافة صنف</button></div>
+            <div class="table-scroll" style="margin-bottom:12px;">
+                <table class="data-table">
+                    <thead><tr><th>المنتج</th><th>الكمية</th><th>سعر التكلفة</th><th>الإجمالي</th><th></th></tr></thead>
+                    <tbody id="purLinesBody"></tbody>
+                </table>
+            </div>
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+                <span style="font-size:0.9rem;">الإجمالي: <b id="purTotal">0.00</b></span>
+            </div>
+            <div style="display:flex;gap:10px;justify-content:flex-end;">
+                <button class="btn btn-secondary" onclick="closePurModal()">إلغاء</button>
+                <button class="btn btn-primary-soft" onclick="savePurchase()">حفظ الفاتورة</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="../../js/ui.js"></script>
+    <script src="../../js/db.js"></script>
+    <script src="../../js/app.js"></script>
+    <script>
+        let purLineCount = 0;
+
+        async function load() {
+            const [suppliers, purchases, products] = await Promise.all([ARDB.getAll('suppliers'), ARDB.getAll('purchases'), ARDB.getAll('products')]);
+            const supById = {}; suppliers.forEach(s => supById[s.id] = s);
+            const sel = document.getElementById('purSupplier');
+            sel.innerHTML = '<option value="">— اختر المورد —</option>' + suppliers.map(s => '<option value="' + s.id + '">' + s.name + '</option>').join('');
+
+            const sorted = purchases.sort((a, b) => (b.date || 0) - (a.date || 0));
+            document.getElementById('purBody').innerHTML = sorted.map(p => {
+                const isCredit = p.paymentType !== 'cash';
+                return '<tr><td class="num">' + p.number + '</td>' +
+                '<td>' + UI.date(p.date) + '</td>' +
+                '<td>' + (p.supplierId && supById[p.supplierId] ? supById[p.supplierId].name : '—') + '</td>' +
+                '<td class="num">' + p.items.length + '</td>' +
+                '<td><span class="badge ' + (isCredit ? 'badge-amber' : 'badge-green') + '">' + (isCredit ? 'آجل' : 'نقداً') + '</span></td>' +
+                '<td class="num" style="font-weight:700;">' + UI.money(p.total) + '</td>' +
+                '<td style="text-align:left;"><button class="btn btn-sm btn-danger" onclick="delPurchase(' + p.id + ')"><i class="fa-solid fa-trash"></i></button></td></tr>';
+            }).join('') || '<tr><td colspan="7" class="empty-state">لا توجد فواتير شراء</td></tr>';
+        }
+
+        async function addPurLine() {
+            const i = purLineCount++;
+            const products = await ARDB.getAll('products');
+            const tr = document.createElement('tr');
+            tr.innerHTML =
+                '<td><select id="plProd_' + i + '" class="pl-prod" style="width:100%;padding:8px;border-radius:8px;border:1px solid var(--border-color);background:var(--card-hover);color:var(--text-primary);">' +
+                '<option value="">— اختر —</option>' +
+                products.map(p => '<option value="' + p.id + '" data-cost="' + (p.cost || 0) + '">' + p.name + '</option>').join('') + '</select></td>' +
+                '<td><input id="plQty_' + i + '" type="number" step="1" min="0" value="1" style="width:70px;padding:8px;border-radius:8px;border:1px solid var(--border-color);background:var(--card-hover);color:var(--text-primary);" oninput="recalcPur()"></td>' +
+                '<td><input id="plCost_' + i + '" type="number" step="0.01" min="0" style="width:90px;padding:8px;border-radius:8px;border:1px solid var(--border-color);background:var(--card-hover);color:var(--text-primary);" oninput="recalcPur()"></td>' +
+                '<td class="num" id="plSub_' + i + '" style="font-weight:700;">0.00</td>' +
+                '<td><button class="btn btn-sm btn-danger" onclick="this.closest(\'tr\').remove();recalcPur();"><i class="fa-solid fa-xmark"></i></button></td>';
+            document.getElementById('purLinesBody').appendChild(tr);
+        }
+
+        function recalcPur() {
+            let total = 0;
+            document.querySelectorAll('#purLinesBody tr').forEach(tr => {
+                const sel = tr.querySelector('select[id^="plProd_"]');
+                const qty = tr.querySelector('input[id^="plQty_"]');
+                const cost = tr.querySelector('input[id^="plCost_"]');
+                if (sel && cost && qty) {
+                    const oc = sel.options[sel.selectedIndex];
+                    if (oc && oc.dataset.cost && !cost.value) cost.value = oc.dataset.cost;
+                    const sub = (Number(qty.value) || 0) * (Number(cost.value) || 0);
+                    total += sub;
+                    const subEl = tr.querySelector('[id^="plSub_"]');
+                    if (subEl) subEl.textContent = Number(sub).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                }
+            });
+            document.getElementById('purTotal').textContent = total.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        }
+
+        async function openPurModal() {
+            document.getElementById('purModal').style.visibility = 'visible';
+            document.getElementById('purModal').style.opacity = '1';
+            document.getElementById('purDate').value = UI.todayInput();
+            document.getElementById('purNote').value = '';
+            document.getElementById('purPayType').value = 'credit';
+            document.getElementById('purLinesBody').innerHTML = '';
+            purLineCount = 0;
+            recalcPur();
+            await load();
+        }
+        function closePurModal() {
+            document.getElementById('purModal').style.visibility = 'hidden';
+            document.getElementById('purModal').style.opacity = '0';
+        }
+
+        async function savePurchase() {
+            const date = new Date(document.getElementById('purDate').value + 'T12:00:00').getTime();
+            const supplierId = Number(document.getElementById('purSupplier').value);
+            const paymentType = document.getElementById('purPayType').value || 'credit';
+            const note = document.getElementById('purNote').value.trim();
+            if (!supplierId) { UI.toast('اختر المورد', 'warn'); return; }
+
+            const items = [];
+            let total = 0;
+            document.querySelectorAll('#purLinesBody tr').forEach(tr => {
+                const sel = tr.querySelector('select[id^="plProd_"]');
+                const qty = tr.querySelector('input[id^="plQty_"]');
+                const cost = tr.querySelector('input[id^="plCost_"]');
+                if (sel) {
+                    const pid = Number(sel.value);
+                    if (pid) {
+                        const q = Number(qty.value) || 0;
+                        const c = Number(cost.value) || 0;
+                        if (q > 0) { items.push({ productId: pid, quantity: q, cost: c, total: q * c }); total += q * c; }
+                    }
+                }
+            });
+            if (!items.length) { UI.toast('أضف على الأقل صنفًا واحدًا', 'warn'); return; }
+
+            const number = await ARDB.nextSeq('purchase', 'PUR-', 6);
+            await ARDB.add('purchases', { number, date, supplierId, paymentType, items, total, note });
+
+            // تحديث سعر تكلفة المنتج و زيادة الرصيد
+            for (const it of items) {
+                const p = await ARDB.getById('products', it.productId);
+                if (p) {
+                    await ARDB.put('products', Object.assign({}, p, { id: p.id, cost: it.cost }));
+                    await ARDB.add('stockMovements', { date, productId: it.productId, direction: 'in', type: 'purchase', quantity: it.quantity, note: 'فاتورة ' + number });
+                }
+            }
+
+            // قيد محاسبي للمشتريات
+            const purchAccount = 14; // مشتريات
+            const creditAccount = paymentType === 'cash' ? 3 : 7; // 7: دائنون/موردون, 3: صندوق النقدية
+            if (total > 0) {
+                await ARDB.add('journalEntries', {
+                    number: await ARDB.nextSeq('journalAuto', 'JRN-', 6),
+                    date, desc: 'فاتورة شراء ' + number + (paymentType === 'cash' ? ' (نقداً)' : ' (آجل)'),
+                    lines: [
+                        { accountId: purchAccount, debit: total, credit: 0 },
+                        { accountId: creditAccount, debit: 0, credit: total }
+                    ]
+                });
+            }
+
+            UI.toast('تم حفظ فاتورة الشراء ' + number, 'ok');
+            closePurModal();
+            load();
+        }
+
+        async function delPurchase(id) {
+            const ok = await UI.confirmBox('حذف الفاتورة؟ لن تُلغى حركات المخزون المرتبطة تلقائيًا.');
+            if (!ok) return;
+            await ARDB.remove('purchases', id);
+            UI.toast('تم الحذف', 'ok');
+            load();
+        }
+
+        load();
+    </script>
+</body>
+</html>

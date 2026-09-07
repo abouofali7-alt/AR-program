@@ -1,0 +1,174 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>دفتر اليومية — AR-Program</title>
+    <link rel="stylesheet" href="../../css/global.css">
+    <link rel="stylesheet" href="../../css/app.css">
+    <link rel="stylesheet" href="../../css/responsive.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
+</head>
+<body class="dark-mode">
+    <div id="appHeaderHost"></div>
+    <main class="pagewrap" style="padding:22px;max-width:1200px;margin:0 auto;">
+        <div class="page-head">
+            <div>
+                <h2>دفتر اليومية</h2>
+                <div class="sub">تسجيل القيود المحاسبية</div>
+            </div>
+            <div class="page-actions">
+                <button class="btn btn-primary-soft" onclick="openEntryModal()"><i class="fa-solid fa-plus"></i> قيد جديد</button>
+            </div>
+        </div>
+        <div class="table-card">
+            <div class="table-head">القيود</div>
+            <div class="table-scroll">
+                <table class="data-table">
+                    <thead><tr><th>الرقم</th><th>التاريخ</th><th>البيان</th><th>مدين</th><th>دائن</th><th></th></tr></thead>
+                    <tbody id="journalBody"></tbody>
+                </table>
+            </div>
+        </div>
+    </main>
+
+    <!-- قيد جديد -->
+    <div id="entryModal" class="modal-mask" style="visibility:hidden;opacity:0;">
+        <div class="modal-box" style="width:min(760px,94vw);">
+            <h3>قيد يومية جديد</h3>
+            <div class="form-grid">
+                <div class="form-item"><label>التاريخ</label><input type="date" id="entryDate"></div>
+                <div class="form-item" style="grid-column: 1 / -1;"><label>البيان</label><input id="entryDesc"></div>
+            </div>
+            <div style="margin-bottom:10px;">
+                <button class="btn btn-sm" onclick="addLine()"><i class="fa-solid fa-plus"></i> إضافة سطر</button>
+            </div>
+            <div class="table-scroll" style="margin-bottom:14px;">
+                <table class="data-table">
+                    <thead><tr><th>الحساب</th><th>مدين</th><th>دائن</th><th></th></tr></thead>
+                    <tbody id="linesBody"></tbody>
+                </table>
+            </div>
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+                <span style="font-size:0.85rem;color:var(--text-secondary);">الفرق: <b id="balanceDiff">0.00</b></span>
+                <span id="diffOk" style="font-size:0.85rem;"></span>
+            </div>
+            <div style="display:flex;gap:10px;justify-content:flex-end;">
+                <button class="btn btn-secondary" onclick="closeEntryModal()">إلغاء</button>
+                <button class="btn btn-primary-soft" onclick="saveEntry()">حفظ القيد</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="../../js/ui.js"></script>
+    <script src="../../js/db.js"></script>
+    <script src="../../js/app.js"></script>
+    <script>
+        let lineCount = 0;
+
+        async function load() {
+            const entries = (await ARDB.getAll('journalEntries')).sort((a, b) => (b.date || 0) - (a.date || 0));
+            const body = document.getElementById('journalBody');
+            body.innerHTML = entries.map(en => {
+                const dr = en.lines.reduce((s, l) => s + (l.debit || 0), 0);
+                const cr = en.lines.reduce((s, l) => s + (l.credit || 0), 0);
+                return '<tr>' +
+                    '<td class="num">' + en.number + '</td>' +
+                    '<td>' + UI.date(en.date) + '</td>' +
+                    '<td>' + en.desc + '</td>' +
+                    '<td class="num" style="color:var(--success);">' + UI.money(dr) + '</td>' +
+                    '<td class="num" style="color:var(--danger);">' + UI.money(cr) + '</td>' +
+                    '<td style="text-align:left;"><button class="btn btn-sm btn-danger" onclick="delEntry(' + en.id + ')"><i class="fa-solid fa-trash"></i></button></td>' +
+                    '</tr>';
+            }).join('') || '<tr><td colspan="6" class="empty-state">لا توجد قيود</td></tr>';
+        }
+
+        async function fillAccountSelects() {
+            const accounts = await ARDB.getAll('accounts');
+            for (let i = 0; i < lineCount; i++) {
+                const sel = document.getElementById('lineAcc_' + i);
+                if (sel) sel.innerHTML = accounts.map(a => '<option value="' + a.id + '">' + a.code + ' — ' + a.name + '</option>').join('');
+            }
+        }
+
+        function addLine() {
+            const i = lineCount++;
+            const tr = document.createElement('tr');
+            tr.innerHTML =
+                '<td><select id="lineAcc_' + i + '" class="line-acc" style="width:100%;padding:8px;border-radius:8px;border:1px solid var(--border-color);background:var(--card-hover);color:var(--text-primary);"><option>جارٍ التحميل...</option></select></td>' +
+                '<td><input id="lineDr_' + i + '" type="number" step="0.01" min="0" style="width:100px;padding:8px;border-radius:8px;border:1px solid var(--border-color);background:var(--card-hover);color:var(--text-primary);" oninput="recalcBal()"></td>' +
+                '<td><input id="lineCr_' + i + '" type="number" step="0.01" min="0" style="width:100px;padding:8px;border-radius:8px;border:1px solid var(--border-color);background:var(--card-hover);color:var(--text-primary);" oninput="recalcBal()"></td>' +
+                '<td><button class="btn btn-sm btn-danger" onclick="this.closest(\'tr\').remove();recalcBal();"><i class="fa-solid fa-xmark"></i></button></td>';
+            document.getElementById('linesBody').appendChild(tr);
+            fillAccountSelects();
+            recalcBal();
+        }
+
+        function recalcBal() {
+            let dr = 0, cr = 0;
+            document.querySelectorAll('#linesBody tr').forEach(tr => {
+                const drIn = tr.querySelector('input[id^="lineDr_"]');
+                const crIn = tr.querySelector('input[id^="lineCr_"]');
+                dr += drIn ? (Number(drIn.value) || 0) : 0;
+                cr += crIn ? (Number(crIn.value) || 0) : 0;
+            });
+            const diff = dr - cr;
+            document.getElementById('balanceDiff').innerHTML = UI.money(Math.abs(diff));
+            const ok = document.getElementById('diffOk');
+            if (Math.abs(diff) < 0.001 && (dr + cr) > 0) { ok.innerHTML = '<span class="badge badge-green">متوازن</span>'; }
+            else if ((dr + cr) > 0) { ok.innerHTML = '<span class="badge badge-red">غير متوازن</span>'; }
+            else { ok.innerHTML = ''; }
+        }
+
+        async function openEntryModal() {
+            document.getElementById('entryModal').style.visibility = 'visible';
+            document.getElementById('entryModal').style.opacity = '1';
+            document.getElementById('entryDate').value = UI.todayInput();
+            document.getElementById('entryDesc').value = '';
+            document.getElementById('linesBody').innerHTML = '';
+            lineCount = 0;
+            addLine(); addLine();
+        }
+        function closeEntryModal() {
+            document.getElementById('entryModal').style.visibility = 'hidden';
+            document.getElementById('entryModal').style.opacity = '0';
+        }
+
+        async function saveEntry() {
+            const dateMs = new Date(document.getElementById('entryDate').value + 'T12:00:00').getTime();
+            const desc = document.getElementById('entryDesc').value.trim();
+            if (!desc) { UI.toast('أدخل البيان', 'warn'); return; }
+            const lines = [];
+            document.querySelectorAll('#linesBody tr').forEach(tr => {
+                const acc = tr.querySelector('select[id^="lineAcc_"]');
+                const dr = tr.querySelector('input[id^="lineDr_"]');
+                const cr = tr.querySelector('input[id^="lineCr_"]');
+                const a = acc ? Number(acc.value) : 0;
+                const d = dr ? (Number(dr.value) || 0) : 0;
+                const c = cr ? (Number(cr.value) || 0) : 0;
+                if (a && (d || c)) lines.push({ accountId: a, debit: d, credit: c });
+            });
+            if (lines.length < 1) { UI.toast('لا توجد أسطر صحيحة', 'warn'); return; }
+            const drSum = lines.reduce((s, l) => s + l.debit, 0);
+            const crSum = lines.reduce((s, l) => s + l.credit, 0);
+            if (Math.abs(drSum - crSum) > 0.001) { UI.toast('القيود غير متوازنة', 'error'); return; }
+
+            const number = await ARDB.nextSeq('journal', 'JRN-', 6);
+            await ARDB.add('journalEntries', { number, date: dateMs, desc, lines });
+            UI.toast('تم حفظ القيد ' + number, 'ok');
+            closeEntryModal();
+            load();
+        }
+
+        async function delEntry(id) {
+            const ok = await UI.confirmBox('حذف القيد؟');
+            if (!ok) return;
+            await ARDB.remove('journalEntries', id);
+            UI.toast('تم الحذف', 'ok');
+            load();
+        }
+
+        load();
+    </script>
+</body>
+</html>

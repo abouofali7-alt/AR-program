@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>الإجازات — AR-Program</title>
+    <link rel="stylesheet" href="../../css/global.css">
+    <link rel="stylesheet" href="../../css/app.css">
+    <link rel="stylesheet" href="../../css/responsive.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
+</head>
+<body class="dark-mode">
+    <div id="appHeaderHost"></div>
+    <main class="pagewrap" style="padding:22px;max-width:1100px;margin:0 auto;">
+        <div class="page-head">
+            <div>
+                <h2>الإجازات</h2>
+                <div class="sub">طلبات الإجازة والموافقة عليها</div>
+            </div>
+            <div class="page-actions">
+                <button class="btn btn-primary-soft" onclick="openLeaveModal()"><i class="fa-solid fa-plus"></i> طلب إجازة</button>
+            </div>
+        </div>
+        <div class="table-card">
+            <div class="table-head">الطلبات</div>
+            <div class="table-scroll">
+                <table class="data-table">
+                    <thead><tr><th>الموظف</th><th>النوع</th><th>من</th><th>إلى</th><th>عدد الأيام</th><th>الحالة</th><th>السبب</th><th></th></tr></thead>
+                    <tbody id="leaveBody"></tbody>
+                </table>
+            </div>
+        </div>
+    </main>
+
+    <div id="leaveModal" class="modal-mask" style="visibility:hidden;opacity:0;">
+        <div class="modal-box">
+            <h3>طلب إجازة جديد</h3>
+            <div class="form-grid">
+                <div class="form-item"><label>الموظف</label><select id="lEmp"></select></div>
+                <div class="form-item"><label>النوع</label>
+                    <select id="lType"><option value="سنوية">سنوية</option><option value="مرضية">مرضية</option><option value="طارئة">طارئة</option><option value="بدون راتب">بدون راتب</option></select>
+                </div>
+                <div class="form-item"><label>من تاريخ</label><input type="date" id="lFrom"></div>
+                <div class="form-item"><label>إلى تاريخ</label><input type="date" id="lTo"></div>
+                <div class="form-item" style="grid-column:1/-1;"><label>السبب</label><input id="lReason"></div>
+            </div>
+            <div style="display:flex;gap:10px;justify-content:flex-end;">
+                <button class="btn btn-secondary" onclick="closeLeaveModal()">إلغاء</button>
+                <button class="btn btn-primary-soft" onclick="saveLeave()">إرسال الطلب</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="../../js/ui.js"></script>
+    <script src="../../js/db.js"></script>
+    <script src="../../js/app.js"></script>
+    <script>
+        async function load() {
+            const [employees, leaves] = await Promise.all([ARDB.getAll('employees'), ARDB.getAll('leaveRequests')]);
+            const empById = {}; employees.forEach(e => empById[e.id] = e);
+            const sel = document.getElementById('lEmp');
+            sel.innerHTML = '<option value="">— اختر —</option>' + employees.map(e => '<option value="' + e.id + '">' + e.name + '</option>').join('');
+
+            const statusBadge = {
+                pending: ['badge-amber', 'قيد الانتظار'],
+                approved: ['badge-green', 'معتمدة'],
+                rejected: ['badge-red', 'مرفوضة']
+            };
+            const sorted = leaves.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+            document.getElementById('leaveBody').innerHTML = sorted.map(l => {
+                const sb = statusBadge[l.status] || statusBadge.pending;
+                const days = Math.max(1, Math.round(((new Date(l.to).getTime()) - (new Date(l.from).getTime())) / 86400000) + 1);
+                return '<tr><td><b>' + (empById[l.employeeId] ? empById[l.employeeId].name : '—') + '</b></td>' +
+                    '<td>' + (l.type || '') + '</td>' +
+                    '<td>' + l.from + '</td>' +
+                    '<td>' + l.to + '</td>' +
+                    '<td class="num">' + days + '</td>' +
+                    '<td><span class="badge ' + sb[0] + '">' + sb[1] + '</span></td>' +
+                    '<td>' + (l.reason || '') + '</td>' +
+                    '<td style="text-align:left;white-space:nowrap;">' +
+                    (l.status === 'pending'
+                        ? '<button class="btn btn-sm btn-primary-soft" onclick="setLeave(' + l.id + ',\'approved\')"><i class="fa-solid fa-check"></i></button> ' +
+                          '<button class="btn btn-sm btn-danger" onclick="setLeave(' + l.id + ',\'rejected\')"><i class="fa-solid fa-xmark"></i></button> '
+                        : '') +
+                    '<button class="btn btn-sm btn-danger" onclick="delLeave(' + l.id + ')"><i class="fa-solid fa-trash"></i></button></td></tr>';
+            }).join('') || '<tr><td colspan="8" class="empty-state">لا توجد طلبات إجازة</td></tr>';
+        }
+        function openLeaveModal() {
+            document.getElementById('leaveModal').style.visibility = 'visible';
+            document.getElementById('leaveModal').style.opacity = '1';
+            document.getElementById('lEmp').value = '';
+            document.getElementById('lType').value = 'سنوية';
+            document.getElementById('lFrom').value = UI.todayInput();
+            document.getElementById('lTo').value = UI.todayInput();
+            document.getElementById('lReason').value = '';
+        }
+        function closeLeaveModal() {
+            document.getElementById('leaveModal').style.visibility = 'hidden';
+            document.getElementById('leaveModal').style.opacity = '0';
+        }
+        async function saveLeave() {
+            const employeeId = Number(document.getElementById('lEmp').value);
+            const from = document.getElementById('lFrom').value;
+            const to = document.getElementById('lTo').value;
+            if (!employeeId || !from || !to) { UI.toast('أكمل البيانات', 'warn'); return; }
+            await ARDB.add('leaveRequests', {
+                employeeId, type: document.getElementById('lType').value,
+                from, to, reason: document.getElementById('lReason').value.trim(),
+                status: 'pending', createdAt: Date.now()
+            });
+            UI.toast('تم إرسال الطلب', 'ok');
+            closeLeaveModal(); load();
+        }
+        async function setLeave(id, status) {
+            await ARDB.update('leaveRequests', id, { status });
+            UI.toast(status === 'approved' ? 'تمت الموافقة' : 'تم الرفض', 'ok');
+            load();
+        }
+        async function delLeave(id) {
+            const ok = await UI.confirmBox('حذف الطلب؟');
+            if (!ok) return;
+            await ARDB.remove('leaveRequests', id);
+            UI.toast('تم الحذف', 'ok'); load();
+        }
+        load();
+    </script>
+</body>
+</html>

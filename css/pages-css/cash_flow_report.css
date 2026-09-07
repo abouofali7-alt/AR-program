@@ -1,0 +1,151 @@
+/* ===== تقارير الفترة والمالية ===== */
+.invoices-container {
+    padding: 30px;
+    max-width: 1200px;
+    margin: 0 auto;
+}
+
+.invoices-container h2 {
+    font-size: 1.6rem;
+    color: var(--text-primary);
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.subtitle-desc {
+    color: var(--text-secondary);
+    margin-bottom: 22px;
+    font-size: 0.92rem;
+}
+
+/* كارد الفلترة بالتاريخ */
+.filter-card {
+    background: var(--card-dark);
+    border: 1px solid var(--card-border);
+    border-radius: 12px;
+    padding: 20px;
+    margin-bottom: 20px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+}
+
+.form-row {
+    display: flex;
+    gap: 15px;
+    flex-wrap: wrap;
+    align-items: flex-end;
+}
+
+.form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    flex: 1;
+    min-width: 200px;
+}
+
+.form-group label {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    font-weight: 500;
+}
+
+.form-input, .form-select {
+    background: var(--bg-dark);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 10px 14px;
+    color: var(--text-primary);
+    font-family: inherit;
+    font-size: 0.95rem;
+    outline: none;
+    transition: border-color 0.3s, box-shadow 0.3s;
+}
+
+.form-input:focus, .form-select:focus {
+    border-color: var(--accent-cyan);
+    box-shadow: 0 0 0 3px rgba(129, 140, 248, 0.18);
+}
+
+.action-btn {
+    background: linear-gradient(135deg, var(--accent-cyan), var(--accent-blue));
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    padding: 0 20px;
+    height: 42px;
+    font-weight: bold;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    transition: opacity 0.2s, transform 0.1s;
+}
+
+.action-btn:hover {
+    opacity: 0.9;
+    transform: translateY(-1px);
+}
+
+/* شريط الملخص المالي */
+.summary-strip {
+    background: var(--card-dark);
+    border: 1px solid var(--card-border);
+    border-radius: 12px;
+    padding: 20px;
+    display: flex;
+    justify-content: space-around;
+    align-items: center;
+    text-align: center;
+    flex-wrap: wrap;
+    gap: 15px;
+    margin-bottom: 20px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+}
+
+.summary-strip h3 {
+    font-size: 1.3rem;
+    margin-top: 5px;
+}
+
+.table-card {
+    background: var(--card-dark);
+    border: 1px solid var(--card-border);
+    border-radius: 12px;
+    overflow-x: auto;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+}
+
+.table-card table {
+    width: 100%;
+    border-collapse: collapse;
+    text-align: right;
+}
+
+.table-card th {
+    background: rgba(148, 163, 184, 0.08);
+    color: var(--accent-cyan);
+    font-size: 0.85rem;
+    padding: 14px 18px;
+    border-bottom: 1px solid var(--border-color);
+    white-space: nowrap;
+}
+
+.table-card td {
+    padding: 14px 18px;
+    border-bottom: 1px solid rgba(148, 163, 184, 0.12);
+    font-size: 0.9rem;
+    color: var(--text-primary);
+}
+
+.table-card tbody tr:hover {
+    background: rgba(129, 140, 248, 0.06);
+}
+
+body.light-mode .table-card th {
+    background: var(--header2-bg);
+    color: var(--accent-cyan);
+}
+

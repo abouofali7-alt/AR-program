@@ -1,0 +1,40 @@
+/* ===== Dashboard Layout (layouts only — visuals live in global.css) ===== */
+
+.dashboard-wrapper {
+    padding: 22px 28px;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    width: 100%;
+    max-width: 100%;
+    margin: 0;
+    box-sizing: border-box;
+}
+
+/* --- KPI summary cards row --- */
+.kpi-container {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 18px;
+    width: 100%;
+}
+
+@media (max-width: 1200px) {
+    .kpi-container { grid-template-columns: repeat(2, 1fr); }
+}
+
+@media (max-width: 600px) {
+    .kpi-container { grid-template-columns: 1fr; }
+}
+
+/* --- Charts grid --- */
+.dashboard-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 18px;
+    width: 100%;
+}
+
+@media (max-width: 1024px) {
+    .dashboard-grid { grid-template-columns: 1fr; }
+}

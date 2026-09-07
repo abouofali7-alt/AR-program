@@ -1,0 +1,121 @@
+/* تنسيقات خاصة بصفحة تقارير المبيعات والأرباح */
+.invoices-container {
+    padding: 30px;
+    max-width: 1200px;
+    margin: 0 auto;
+}
+
+.invoices-container h2 {
+    font-size: 1.8rem;
+    margin-bottom: 10px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.subtitle-desc {
+    color: var(--text-secondary);
+    margin-bottom: 25px;
+    font-size: 0.95rem;
+}
+
+/* كارد الفلترة والبحث */
+.filter-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    padding: 20px;
+    margin-bottom: 20px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+.form-row {
+    display: flex;
+    gap: 15px;
+    flex-wrap: wrap;
+    align-items: flex-end;
+}
+
+.form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    flex: 1;
+    min-width: 200px;
+}
+
+.form-group label {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    font-weight: 500;
+}
+
+.form-input {
+    background: var(--bg-dark);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 10px 14px;
+    color: var(--text-main);
+    font-family: inherit;
+    font-size: 0.95rem;
+    outline: none;
+    transition: border-color 0.3s;
+}
+
+.form-input:focus {
+    border-color: var(--accent-cyan);
+}
+
+.action-btn {
+    background: var(--accent-cyan);
+    color: var(--bg-dark);
+    border: none;
+    border-radius: 8px;
+    padding: 0 20px;
+    font-weight: bold;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    transition: opacity 0.2s, transform 0.1s;
+}
+
+.action-btn:hover {
+    opacity: 0.9;
+    transform: translateY(-1px);
+}
+
+/* تنسيق الجدول */
+.table-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    overflow-x: auto;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+.table-card table {
+    width: 100%;
+    border-collapse: collapse;
+    text-align: right;
+}
+
+.table-card th {
+    background: rgba(148, 163, 184, 0.07);
+    color: var(--text-secondary);
+    font-size: 0.85rem;
+    padding: 14px 18px;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.table-card td {
+    padding: 14px 18px;
+    border-bottom: 1px solid rgba(148, 163, 184, 0.08);
+    font-size: 0.9rem;
+    color: var(--text-main);
+}
+
+.table-card tbody tr:hover {
+    background: rgba(148, 163, 184, 0.05);
+}

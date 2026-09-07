@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>دخول — AR-Program</title>
+    <link rel="stylesheet" href="../css/global.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
+    <link rel="stylesheet" href="../css/responsive.css">
+    <style>
+        .login-wrap { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 20px; }
+        .login-card { width: min(420px, 100%); background: var(--card-dark); border: 1px solid var(--border-color); border-radius: 16px; padding: 32px; box-shadow: var(--shadow-card); }
+        .login-logo { text-align: center; margin-bottom: 20px; }
+        .login-logo i { font-size: 2.4rem; color: var(--accent-cyan); }
+        .login-card h1 { font-size: 1.5rem; margin: 8px 0 2px; }
+        .login-card p.sub { color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 24px; text-align: center; }
+        .field { margin-bottom: 16px; }
+        .field label { display: block; font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 6px; }
+        .field input { width: 100%; padding: 11px 14px; border-radius: 9px; border: 1px solid var(--border-color); background: var(--card-hover); color: var(--text-primary); font-size: 1rem; }
+        .field input:focus { outline: none; border-color: var(--accent-cyan); box-shadow: var(--focus-ring); }
+        .btn-login { width: 100%; padding: 12px; border: none; border-radius: 10px; font-size: 1.05rem; font-weight: 700; cursor: pointer; background: var(--btn-gradient); color: #fff; }
+        .btn-login:hover { filter: brightness(1.1); }
+        .login-hint { margin-top: 18px; font-size: 0.82rem; color: var(--text-secondary); text-align: center; line-height: 1.7; }
+    </style>
+</head>
+<body class="dark-mode">
+    <div class="login-wrap">
+        <div class="login-card">
+            <div class="login-logo"><i class="fa-solid fa-cubes"></i></div>
+            <h1 style="text-align:center;">AR-Program</h1>
+            <p class="sub">النظام المتكامل لإدارة المنشآت</p>
+            <form id="loginForm">
+                <div class="field">
+                    <label>اسم المستخدم</label>
+                    <input id="loginUser" type="text" autocomplete="username" placeholder="admin" required>
+                </div>
+                <div class="field">
+                    <label>كلمة المرور</label>
+                    <input id="loginPass" type="password" autocomplete="current-password" placeholder="••••••••" required>
+                </div>
+                <button type="submit" class="btn-login">دخول</button>
+            </form>
+            <div class="login-hint">
+                الحساب الافتراضي: <b>admin</b> / <b>admin123</b><br>
+                يمكنك تغيير كلمة المرور من الإعدادات بعد الدخول
+            </div>
+        </div>
+    </div>
+    <script src="../js/ui.js"></script>
+    <script src="../js/db.js"></script>
+    <script>
+        (async function () {
+            const f = document.getElementById('loginForm');
+            f.addEventListener('submit', async (ev) => {
+                ev.preventDefault();
+                const u = document.getElementById('loginUser').value.trim();
+                const p = document.getElementById('loginPass').value;
+                if (!u || !p) { UI.toast('أدخل اسم المستخدم وكلمة المرور', 'warn'); return; }
+                try {
+                    const users = await ARDB.getAll('users');
+                    const found = users.find(x => x.username === u && x.password === ARDB.hashPassword(p));
+                    if (!found) { UI.toast('بيانات غير صحيحة', 'error'); return; }
+                    if (found.active === false) { UI.toast('الحساب موقوف', 'error'); return; }
+                    ARDB.setSession({ id: found.id, username: found.username, name: found.name, roleId: found.roleId, roleName: found.roleName });
+                    UI.toast('تم الدخول بنجاح', 'ok');
+                    setTimeout(() => { window.location.href = '../index.html'; }, 500);
+                } catch (e) { UI.toast('خطأ في قاعدة البيانات: ' + e.message, 'error'); }
+            });
+        })();
+    </script>
+</body>
+</html>

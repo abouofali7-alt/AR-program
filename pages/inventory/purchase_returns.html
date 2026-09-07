@@ -1,0 +1,179 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>مرتجعات المشتريات — AR-Program</title>
+    <link rel="stylesheet" href="../../css/global.css">
+    <link rel="stylesheet" href="../../css/app.css">
+    <link rel="stylesheet" href="../../css/responsive.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
+</head>
+<body class="dark-mode">
+    <div id="appHeaderHost"></div>
+    <main class="pagewrap" style="padding:22px;max-width:1200px;margin:0 auto;">
+        <div class="page-head">
+            <div>
+                <h2>مرتجعات المشتريات</h2>
+                <div class="sub">إرجاع أصناف لموردين وخصمها من المخزون</div>
+            </div>
+            <div class="page-actions">
+                <button class="btn btn-primary-soft" onclick="openPtrModal()"><i class="fa-solid fa-plus"></i> مرتجع جديد</button>
+            </div>
+        </div>
+        <div class="table-card">
+            <div class="table-head">سجل مرتجعات الشراء</div>
+            <div class="table-scroll">
+                <table class="data-table">
+                    <thead><tr><th>الرقم</th><th>التاريخ</th><th>الفاتورة</th><th>المورد</th><th>الإجمالي</th><th></th></tr></thead>
+                    <tbody id="ptrBody"></tbody>
+                </table>
+            </div>
+        </div>
+    </main>
+
+    <div id="ptrModal" class="modal-mask" style="visibility:hidden;opacity:0;">
+        <div class="modal-box" style="width:min(820px,94vw);">
+            <h3>مرتجع مشتريات</h3>
+            <div class="form-grid">
+                <div class="form-item"><label>التاريخ</label><input type="date" id="ptrDate"></div>
+                <div class="form-item"><label>فاتورة الشراء</label><select id="ptrInvoice" onchange="onPickPtr()"></select></div>
+                <div class="form-item" style="grid-column:1/-1;"><label>ملاحظة</label><input id="ptrNote"></div>
+            </div>
+            <div class="table-scroll" style="margin-bottom:12px;">
+                <table class="data-table">
+                    <thead><tr><th>المنتج</th><th>الكمية المشتراة</th><th>الكمية المرتجعة</th><th>سعر الشراء</th><th>الإجمالي</th></tr></thead>
+                    <tbody id="ptrLinesBody"></tbody>
+                </table>
+            </div>
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+                <span>الإجمالي: <b id="ptrTotal">0.00</b></span>
+            </div>
+            <div style="display:flex;gap:10px;justify-content:flex-end;">
+                <button class="btn btn-secondary" onclick="closePtrModal()">إلغاء</button>
+                <button class="btn btn-primary-soft" onclick="savePtr()">حفظ المرتجع</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="../../js/ui.js"></script>
+    <script src="../../js/db.js"></script>
+    <script src="../../js/app.js"></script>
+    <script>
+        let pickedPurchase = null;
+        const cashAcc = 3, purchAcc = 14;
+
+        async function load() {
+            const [ptr, purchases, suppliers] = await Promise.all([ARDB.getAll('purchaseReturns'), ARDB.getAll('purchases'), ARDB.getAll('suppliers')]);
+            const supById = {}; suppliers.forEach(s => supById[s.id] = s);
+            const sorted = ptr.sort((a, b) => (b.date || 0) - (a.date || 0));
+            document.getElementById('ptrBody').innerHTML = sorted.map(r =>
+                '<tr><td class="num" style="font-weight:700;">' + r.number + '</td>' +
+                '<td>' + UI.date(r.date) + '</td>' +
+                '<td>' + (r.purchaseNumber || '—') + '</td>' +
+                '<td>' + (r.supplierId && supById[r.supplierId] ? supById[r.supplierId].name : '—') + '</td>' +
+                '<td class="num" style="font-weight:700;color:var(--danger);">' + UI.money(r.total) + '</td>' +
+                '<td style="text-align:left;"><button class="btn btn-sm btn-danger" onclick="delPtr(' + r.id + ')"><i class="fa-solid fa-trash"></i></button></td></tr>'
+            ).join('') || '<tr><td colspan="6" class="empty-state">لا توجد مرتجعات شراء</td></tr>';
+
+            const sel = document.getElementById('ptrInvoice');
+            sel.innerHTML = '<option value="">— اختر فاتورة —</option>' + purchases.map(p =>
+                '<option value="' + p.id + '">' + p.number + ' — ' + (p.supplierId && supById[p.supplierId] ? supById[p.supplierId].name : 'بدون مورد') + '</option>').join('');
+        }
+
+        async function openPtrModal() {
+            document.getElementById('ptrModal').style.visibility = 'visible';
+            document.getElementById('ptrModal').style.opacity = '1';
+            document.getElementById('ptrDate').value = UI.todayInput();
+            document.getElementById('ptrNote').value = '';
+            document.getElementById('ptrLinesBody').innerHTML = '<tr><td colspan="5" class="empty-state">اختر فاتورة أولًا</td></tr>';
+            document.getElementById('ptrTotal').textContent = '0.00';
+            pickedPurchase = null;
+            await load();
+        }
+        function closePtrModal() {
+            document.getElementById('ptrModal').style.visibility = 'hidden';
+            document.getElementById('ptrModal').style.opacity = '0';
+        }
+        function onPickPtr() {
+            const id = Number(document.getElementById('ptrInvoice').value);
+            loadPtrLines(id);
+        }
+        async function loadPtrLines(id) {
+            if (!id) { document.getElementById('ptrLinesBody').innerHTML = '<tr><td colspan="5" class="empty-state">اختر فاتورة أولًا</td></tr>'; recalcPtr(); return; }
+            pickedPurchase = await ARDB.getById('purchases', id);
+            if (!pickedPurchase) return;
+            const products = await ARDB.getAll('products');
+            const pById = {}; products.forEach(p => pById[p.id] = p);
+            document.getElementById('ptrLinesBody').innerHTML = pickedPurchase.items.map((it, i) =>
+                '<tr>' +
+                '<td>' + (pById[it.productId] ? pById[it.productId].name : 'صنف ' + it.productId) + '</td>' +
+                '<td class="num">' + it.quantity + '</td>' +
+                '<td><input type="number" min="0" max="' + it.quantity + '" value="' + it.quantity + '" class="ptr-qty" data-cost="' + it.cost + '" style="width:70px;padding:8px;border-radius:8px;border:1px solid var(--border-color);background:var(--card-hover);color:var(--text-primary);" oninput="recalcPtr()"></td>' +
+                '<td class="num">' + UI.money(it.cost) + '</td>' +
+                '<td class="num ptr-sub" style="font-weight:700;">' + UI.money(it.quantity * it.cost) + '</td>' +
+                '</tr>'
+            ).join('');
+            recalcPtr();
+        }
+        function recalcPtr() {
+            let total = 0;
+            document.querySelectorAll('#ptrLinesBody tr').forEach(tr => {
+                const q = tr.querySelector('.ptr-qty');
+                const sub = tr.querySelector('.ptr-sub');
+                if (q && sub) {
+                    const v = (Number(q.value) || 0) * (Number(q.dataset.cost) || 0);
+                    total += v;
+                    sub.innerHTML = UI.money(v);
+                }
+            });
+            document.getElementById('ptrTotal').innerHTML = UI.money(total);
+        }
+
+        async function savePtr() {
+            if (!pickedPurchase) { UI.toast('اختر فاتورة الشراء', 'warn'); return; }
+            const date = new Date(document.getElementById('ptrDate').value + 'T12:00:00').getTime();
+            const note = document.getElementById('ptrNote').value.trim();
+            const items = [];
+            let total = 0;
+            let anyQty = false;
+            pickedPurchase.items.forEach((it, i) => {
+                const qEl = document.querySelectorAll('.ptr-qty')[i];
+                const q = qEl ? (Number(qEl.value) || 0) : 0;
+                if (q < 0 || q > it.quantity) { UI.toast('كمية مرتجعة أكبر من المشتراة', 'error'); anyQty = false; total = -1; return; }
+                if (q > 0) { items.push({ productId: it.productId, quantity: q, cost: it.cost, total: q * it.cost }); total += q * it.cost; anyQty = true; }
+            });
+            if (total < 0) return;
+            if (!anyQty) { UI.toast('حدد كمية مرتجعة واحدة على الأقل', 'warn'); return; }
+
+            const number = await ARDB.nextSeq('purchaseReturn', 'PURR-', 6);
+            await ARDB.add('purchaseReturns', { number, date, purchaseId: pickedPurchase.id, purchaseNumber: pickedPurchase.number, supplierId: pickedPurchase.supplierId, items, total, note, createdAt: Date.now() });
+
+            // خصم الأصناف المرتجعة من المخزون
+            for (const it of items) {
+                await ARDB.add('stockMovements', { date, productId: it.productId, direction: 'out', type: 'return_purchase', quantity: it.quantity, note: 'مرتجع ' + number });
+            }
+            // قيد: إلغاء حساب المشتريات — استرداد نقدي
+            if (total > 0) {
+                await ARDB.add('journalEntries', {
+                    number: await ARDB.nextSeq('journalAuto', 'JRN-', 6),
+                    date, desc: 'مرتجع مشتريات ' + number,
+                    lines: [
+                        { accountId: cashAcc, debit: total, credit: 0 },
+                        { accountId: purchAcc, debit: 0, credit: total }
+                    ]
+                });
+            }
+            UI.toast('تم حفظ المرتجع ' + number, 'ok');
+            closePtrModal(); load();
+        }
+        async function delPtr(id) {
+            const ok = await UI.confirmBox('حذف المرتجع؟ (لن تُعدل حركات المخزون)');
+            if (!ok) return;
+            await ARDB.remove('purchaseReturns', id);
+            UI.toast('تم الحذف', 'ok'); load();
+        }
+        load();
+    </script>
+</body>
+</html>

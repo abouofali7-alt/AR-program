@@ -1,0 +1,120 @@
+/* ============================================================
+   AR-Program — تنسيقات الإطار المشترك (Topbar + Drawer + أزرار)
+   ============================================================ */
+
+.topbar {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 12px 20px; background: rgba(11, 18, 32, .85); backdrop-filter: blur(8px);
+    border-bottom: 1px solid var(--border-color); position: sticky; top: 0; z-index: 100;
+}
+body.light-mode .topbar { background: rgba(255, 255, 255, .85); border-bottom-color: rgba(15, 23, 42, .1); }
+
+.topbar-right, .topbar-left { display: flex; align-items: center; gap: 10px; }
+.brand { display: inline-flex; align-items: center; gap: 8px; font-weight: 800; font-size: 1.15rem; color: var(--accent-cyan); text-decoration: none; }
+.user-badge {
+    display: inline-flex; align-items: center; gap: 6px; font-size: 0.85rem;
+    background: var(--card-hover); padding: 5px 12px; border-radius: 15px;
+    border: 1px solid var(--border-color); color: var(--accent-cyan);
+}
+.icon-btn {
+    width: 38px; height: 38px; border-radius: 10px; border: 1px solid var(--border-color);
+    background: var(--card-hover); color: var(--text-primary); font-size: 1rem; cursor: pointer;
+    display: inline-flex; align-items: center; justify-content: center;
+}
+.icon-btn:hover { border-color: var(--accent-cyan); }
+.icon-btn.danger:hover { border-color: var(--danger); color: var(--danger); }
+
+/* ---------- Drawer (القائمة الجانبية المتنقلة) ---------- */
+.drawer {
+    position: fixed; inset: 0; background: rgba(2, 6, 23, .6); z-index: 200;
+    visibility: hidden; opacity: 0; transition: opacity .25s;
+}
+.drawer.open { visibility: visible; opacity: 1; }
+.drawer-content {
+    position: absolute; top: 0; right: 0; bottom: 0; width: min(300px, 85vw);
+    background: var(--bg-dark); border-inline-start: 1px solid var(--border-color);
+    padding: 16px; overflow-y: auto; transform: translateX(100%); transition: transform .25s;
+}
+.drawer.open .drawer-content { transform: translateX(0); }
+body.light-mode .drawer-content { background: #f6f8fd; }
+.drawer-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 18px; padding-bottom: 12px; border-bottom: 1px solid var(--border-color); }
+
+.nav-group { margin-bottom: 10px; }
+.nav-group-title { font-size: 0.8rem; color: var(--text-secondary); padding: 8px 10px; display: flex; align-items: center; gap: 8px; }
+.nav-group-title i { color: var(--accent-purple); }
+.nav-link {
+    display: block; padding: 9px 14px; border-radius: 9px; color: var(--text-primary);
+    text-decoration: none; font-size: 0.92rem; margin-bottom: 2px;
+}
+.nav-link:hover { background: var(--card-hover); }
+.nav-link.active { background: var(--card-hover); color: var(--accent-cyan); font-weight: 700; }
+
+/* ---------- أزرار عامة ---------- */
+.btn { display: inline-flex; align-items: center; gap: 6px; padding: 9px 16px; border-radius: 9px; border: 1px solid var(--border-color); background: var(--card-hover); color: var(--text-primary); font-size: 0.9rem; cursor: pointer; text-decoration: none; }
+.btn:hover { border-color: var(--accent-cyan); }
+.btn-primary-soft { background: var(--btn-gradient); color: #fff; border: none; font-weight: 700; }
+.btn-secondary { background: transparent; border: 1px solid var(--border-color); }
+.btn-danger { background: transparent; border: 1px solid var(--danger); color: var(--danger); }
+.btn-sm { padding: 5px 11px; font-size: 0.82rem; }
+
+/* ---------- ترويسة الصفحات ---------- */
+.page-head { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; margin-bottom: 18px; }
+.page-head h2 { font-size: 1.25rem; }
+.page-head .sub { color: var(--text-secondary); font-size: 0.85rem; margin-top: 4px; }
+.page-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+
+/* ---------- بطاقات الإحصائيات ---------- */
+.stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; margin-bottom: 20px; }
+.stat-card { background: var(--card-dark); border: 1px solid var(--border-color); border-radius: 14px; padding: 18px; box-shadow: var(--shadow-card); }
+.stat-card .label { font-size: 0.82rem; color: var(--text-secondary); margin-bottom: 6px; display: flex; align-items: center; gap: 6px; }
+.stat-card .value { font-size: 1.5rem; font-weight: 800; color: var(--text-primary); }
+.stat-card .value.green { color: var(--success); }
+.stat-card .value.red { color: var(--danger); }
+.stat-card .value.cyan { color: var(--accent-cyan); }
+.stat-card .value.purple { color: var(--accent-purple); }
+
+/* ---------- الجداول ---------- */
+.table-card { background: var(--card-dark); border: 1px solid var(--border-color); border-radius: 14px; overflow: hidden; box-shadow: var(--shadow-card); }
+.table-card .table-head { padding: 14px 18px; border-bottom: 1px solid var(--border-color); font-weight: 700; display: flex; align-items: center; justify-content: space-between; }
+.table-scroll { overflow-x: auto; }
+table.data-table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+table.data-table th { text-align: right; padding: 11px 14px; background: var(--card-hover); color: var(--text-secondary); font-weight: 600; border-bottom: 1px solid var(--border-color); white-space: nowrap; }
+table.data-table td { padding: 10px 14px; border-bottom: 1px solid rgba(148,163,184,.08); }
+table.data-table tbody tr:hover { background: var(--card-hover); }
+table.data-table .num { direction: ltr; }
+
+/* ---------- النماذج ---------- */
+.form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; margin-bottom: 18px; }
+.form-item label { display: block; font-size: 0.82rem; color: var(--text-secondary); margin-bottom: 6px; }
+.form-item input, .form-item select, .form-item textarea {
+    width: 100%; padding: 10px 13px; border-radius: 9px; border: 1px solid var(--border-color);
+    background: var(--card-hover); color: var(--text-primary); font-size: 0.95rem; font-family: inherit;
+}
+.form-item input:focus, .form-item select:focus, .form-item textarea:focus { outline: none; border-color: var(--accent-cyan); box-shadow: var(--focus-ring); }
+.form-item textarea { min-height: 70px; resize: vertical; }
+
+/* ---------- شارات ---------- */
+.badge { display: inline-block; padding: 3px 10px; border-radius: 12px; font-size: 0.75rem; font-weight: 600; }
+.badge-green { background: rgba(34,197,94,.15); color: var(--success); }
+.badge-red { background: rgba(239,68,68,.15); color: var(--danger); }
+.badge-amber { background: rgba(245,158,11,.15); color: var(--warning); }
+.badge-blue { background: rgba(56,189,248,.15); color: var(--info); }
+.badge-purple { background: rgba(192,132,252,.15); color: var(--accent-purple); }
+
+/* ---------- لوجو الوحدات (Dashboard) ---------- */
+.module-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 16px; }
+.module-card {
+    background: var(--card-dark); border: 1px solid var(--border-color); border-radius: 16px; padding: 24px;
+    text-align: center; text-decoration: none; color: var(--text-primary); transition: transform .15s, border-color .15s;
+}
+.module-card:hover { transform: translateY(-3px); border-color: var(--card-hover-border); }
+.module-card i { font-size: 2rem; margin-bottom: 10px; }
+.module-card h4 { font-size: 1.05rem; margin-bottom: 6px; }
+.module-card p { font-size: 0.82rem; color: var(--text-secondary); }
+
+.empty-state { text-align: center; padding: 40px; color: var(--text-secondary); font-size: 0.9rem; }
+
+/* ---------- النوافذ (Modal) ---------- */
+.modal-mask { position: fixed; inset: 0; background: rgba(2,6,23,.7); z-index: 500; display: flex; align-items: center; justify-content: center; backdrop-filter: blur(3px); transition: opacity .2s; }
+.modal-box { background: var(--card-dark); border: 1px solid var(--border-color); border-radius: 16px; padding: 24px; width: min(560px, 92vw); box-shadow: var(--shadow-card); max-height: 90vh; overflow-y: auto; }
+.modal-box h3 { margin-bottom: 16px; color: var(--accent-cyan); font-size: 1.1rem; }

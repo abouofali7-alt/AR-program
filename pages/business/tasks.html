@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>المهام — AR-Program</title>
+    <link rel="stylesheet" href="../../css/global.css">
+    <link rel="stylesheet" href="../../css/app.css">
+    <link rel="stylesheet" href="../../css/responsive.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
+</head>
+<body class="dark-mode">
+    <div id="appHeaderHost"></div>
+    <main class="pagewrap" style="padding:22px;max-width:1200px;margin:0 auto;">
+        <div class="page-head">
+            <div>
+                <h2>المهام</h2>
+                <div class="sub">إدارة المهام والتكليفات</div>
+            </div>
+            <div class="page-actions">
+                <button class="btn btn-primary-soft" onclick="openTaskModal()"><i class="fa-solid fa-plus"></i> مهمة جديدة</button>
+            </div>
+        </div>
+        <div class="form-grid" style="grid-template-columns:repeat(auto-fit,minmax(180px,1fr));margin-bottom:16px;">
+            <div class="form-item">
+                <select id="taskFilter" onchange="load()" style="padding:10px;border-radius:9px;border:1px solid var(--border-color);background:var(--card-hover);color:var(--text-primary);">
+                    <option value="">كل المهام</option>
+                    <option value="pending">قيد الانتظار</option>
+                    <option value="in_progress">جارية</option>
+                    <option value="done">مكتملة</option>
+                    <option value="cancelled">ملغاة</option>
+                </select>
+            </div>
+        </div>
+        <div class="table-card">
+            <div class="table-head">المهام</div>
+            <div class="table-scroll">
+                <table class="data-table">
+                    <thead><tr><th>المهمة</th><th>المشروع</th><th>المسؤول</th><th>الأولوية</th><th>الموعد</th><th>الحالة</th><th></th></tr></thead>
+                    <tbody id="taskBody"></tbody>
+                </table>
+            </div>
+        </div>
+    </main>
+
+    <div id="taskModal" class="modal-mask" style="visibility:hidden;opacity:0;">
+        <div class="modal-box">
+            <h3>مهمة جديدة</h3>
+            <div class="form-grid">
+                <div class="form-item" style="grid-column:1/-1;"><label>عنوان المهمة</label><input id="tTitle"></div>
+                <div class="form-item"><label>المشروع</label><select id="tProject"></select></div>
+                <div class="form-item"><label>المسؤول</label><select id="tAssignee"></select></div>
+                <div class="form-item"><label>الأولوية</label>
+                    <select id="tPriority"><option value="low">منخفضة</option><option value="medium">متوسطة</option><option value="high">عالية</option><option value="urgent">عاجلة</option></select>
+                </div>
+                <div class="form-item"><label>الحالة</label>
+                    <select id="tStatus"><option value="pending">قيد الانتظار</option><option value="in_progress">جارية</option><option value="done">مكتملة</option><option value="cancelled">ملغاة</option></select>
+                </div>
+                <div class="form-item"><label>الموعد النهائي</label><input type="date" id="tDue"></div>
+            </div>
+            <div style="display:flex;gap:10px;justify-content:flex-end;">
+                <button class="btn btn-secondary" onclick="closeTaskModal()">إلغاء</button>
+                <button class="btn btn-primary-soft" onclick="saveTask()">حفظ</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="../../js/ui.js"></script>
+    <script src="../../js/db.js"></script>
+    <script src="../../js/app.js"></script>
+    <script>
+        let editingTid = null;
+        const prio = { low: ['badge-blue','منخفضة'], medium: ['badge-amber','متوسطة'], high: ['badge-red','عالية'], urgent: ['badge-purple','عاجلة'] };
+        const statu = { pending: ['badge-amber','قيد الانتظار'], in_progress: ['badge-blue','جارية'], done: ['badge-green','مكتملة'], cancelled: ['badge-red','ملغاة'] };
+
+        async function load() {
+            const filter = document.getElementById('taskFilter').value;
+            const [tasks, projects, employees] = await Promise.all([ARDB.getAll('tasks'), ARDB.getAll('projects'), ARDB.getAll('employees')]);
+            const projById = {}, empById = {};
+            projects.forEach(p => projById[p.id] = p);
+            employees.forEach(e => empById[e.id] = e);
+
+            const selP = document.getElementById('tProject');
+            selP.innerHTML = '<option value="">— لا مشروع —</option>' + projects.map(p => '<option value="' + p.id + '">' + p.name + '</option>').join('');
+            const selA = document.getElementById('tAssignee');
+            selA.innerHTML = '<option value="">— غير محدد —</option>' + employees.map(e => '<option value="' + e.id + '">' + e.name + '</option>').join('');
+
+            const list = tasks.filter(t => !filter || t.status === filter).sort((a, b) => (a.due || '').localeCompare(b.due || ''));
+            document.getElementById('taskBody').innerHTML = list.map(t => {
+                const pr = prio[t.priority] || prio.medium;
+                const st = statu[t.status] || statu.pending;
+                return '<tr><td><b>' + t.title + '</b></td>' +
+                    '<td>' + (t.projectId && projById[t.projectId] ? projById[t.projectId].name : '—') + '</td>' +
+                    '<td>' + (t.assigneeId && empById[t.assigneeId] ? empById[t.assigneeId].name : '—') + '</td>' +
+                    '<td><span class="badge ' + pr[0] + '">' + pr[1] + '</span></td>' +
+                    '<td class="num">' + (t.due || '—') + '</td>' +
+                    '<td><span class="badge ' + st[0] + '">' + st[1] + '</span></td>' +
+                    '<td style="text-align:left;white-space:nowrap;">' +
+                    '<button class="btn btn-sm" onclick="editTask(' + t.id + ')"><i class="fa-solid fa-pen"></i></button> ' +
+                    '<button class="btn btn-sm btn-danger" onclick="delTask(' + t.id + ')"><i class="fa-solid fa-trash"></i></button></td></tr>';
+            }).join('') || '<tr><td colspan="7" class="empty-state">لا توجد مهام</td></tr>';
+        }
+        function openTaskModal() {
+            editingTid = null;
+            document.getElementById('tTitle').value = '';
+            document.getElementById('tProject').value = '';
+            document.getElementById('tAssignee').value = '';
+            document.getElementById('tPriority').value = 'medium';
+            document.getElementById('tStatus').value = 'pending';
+            document.getElementById('tDue').value = '';
+            document.getElementById('taskModal').style.visibility = 'visible';
+            document.getElementById('taskModal').style.opacity = '1';
+        }
+        function closeTaskModal() {
+            document.getElementById('taskModal').style.visibility = 'hidden';
+            document.getElementById('taskModal').style.opacity = '0';
+        }
+        async function editTask(id) {
+            const t = await ARDB.getById('tasks', id);
+            if (!t) return;
+            editingTid = id;
+            document.getElementById('tTitle').value = t.title || '';
+            document.getElementById('tProject').value = t.projectId || '';
+            document.getElementById('tAssignee').value = t.assigneeId || '';
+            document.getElementById('tPriority').value = t.priority || 'medium';
+            document.getElementById('tStatus').value = t.status || 'pending';
+            document.getElementById('tDue').value = t.due || '';
+            document.getElementById('taskModal').style.visibility = 'visible';
+            document.getElementById('taskModal').style.opacity = '1';
+        }
+        async function saveTask() {
+            const title = document.getElementById('tTitle').value.trim();
+            if (!title) { UI.toast('عنوان المهمة مطلوب', 'warn'); return; }
+            const rec = {
+                title,
+                projectId: document.getElementById('tProject').value ? Number(document.getElementById('tProject').value) : null,
+                assigneeId: document.getElementById('tAssignee').value ? Number(document.getElementById('tAssignee').value) : null,
+                priority: document.getElementById('tPriority').value,
+                status: document.getElementById('tStatus').value,
+                due: document.getElementById('tDue').value,
+                createdAt: Date.now()
+            };
+            if (editingTid) { rec.id = editingTid; await ARDB.put('tasks', rec); UI.toast('تم التعديل', 'ok'); }
+            else { await ARDB.add('tasks', rec); UI.toast('تمت الإضافة', 'ok'); }
+            closeTaskModal(); load();
+        }
+        async function delTask(id) {
+            const ok = await UI.confirmBox('حذف المهمة؟');
+            if (!ok) return;
+            await ARDB.remove('tasks', id);
+            UI.toast('تم الحذف', 'ok'); load();
+        }
+        load();
+    </script>
+</body>
+</html>

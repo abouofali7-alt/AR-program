@@ -1,0 +1,170 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>الرواتب — AR-Program</title>
+    <link rel="stylesheet" href="../../css/global.css">
+    <link rel="stylesheet" href="../../css/app.css">
+    <link rel="stylesheet" href="../../css/responsive.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
+</head>
+<body class="dark-mode">
+    <div id="appHeaderHost"></div>
+    <main class="pagewrap" style="padding:22px;max-width:1200px;margin:0 auto;">
+        <div class="page-head">
+            <div>
+                <h2>الرواتب</h2>
+                <div class="sub">الراتب الأساسي + الإضافات + الخصومات = الصافي</div>
+            </div>
+            <div class="page-actions">
+                <button class="btn btn-primary-soft" onclick="openPayModal()"><i class="fa-solid fa-plus"></i> راتب جديد</button>
+            </div>
+        </div>
+        <div class="table-card">
+            <div class="table-head">سجل الرواتب</div>
+            <div class="table-scroll">
+                <table class="data-table">
+                    <thead><tr><th>الموظف</th><th>الشهر</th><th>الأساسي</th><th>الإضافات</th><th>الخصومات</th><th>الصافي</th><th>الحالة</th><th></th></tr></thead>
+                    <tbody id="payBody"></tbody>
+                </table>
+            </div>
+        </div>
+    </main>
+
+    <div id="payModal" class="modal-mask" style="visibility:hidden;opacity:0;">
+        <div class="modal-box">
+            <h3>راتب جديد</h3>
+            <div class="form-grid">
+                <div class="form-item"><label>الموظف</label><select id="payEmp"></select></div>
+                <div class="form-item"><label>الشهر</label><input type="month" id="payPeriod"></div>
+                <div class="form-item"><label>الراتب الأساسي</label><input type="number" id="payBase" step="0.01" min="0"></div>
+                <div class="form-item"><label>الإضافات</label><input type="number" id="payAdd" step="0.01" min="0" value="0"></div>
+                <div class="form-item"><label>الخصومات</label><input type="number" id="payDeduct" step="0.01" min="0" value="0"></div>
+            </div>
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+                <span>الصافي: <b id="payNet">0.00</b></span>
+                <span id="payStatusWrap"></span>
+            </div>
+            <div style="display:flex;gap:10px;justify-content:flex-end;">
+                <button class="btn btn-secondary" onclick="closePayModal()">إلغاء</button>
+                <button class="btn btn-primary-soft" onclick="savePay()">حفظ الراتب</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="../../js/ui.js"></script>
+    <script src="../../js/db.js"></script>
+    <script src="../../js/app.js"></script>
+    <script>
+        async function load() {
+            const [employees, payroll] = await Promise.all([ARDB.getAll('employees'), ARDB.getAll('payroll')]);
+            const empById = {}; employees.forEach(e => empById[e.id] = e);
+            const sel = document.getElementById('payEmp');
+            sel.innerHTML = '<option value="">— اختر —</option>' + employees.map(e => '<option value="' + e.id + '">' + e.name + '</option>').join('');
+
+            const sorted = payroll.sort((a, b) => (b.period || '').localeCompare(a.period || ''));
+            document.getElementById('payBody').innerHTML = sorted.map(p =>
+                '<tr><td><b>' + (empById[p.employeeId] ? empById[p.employeeId].name : '—') + '</b></td>' +
+                '<td>' + (p.period || '') + '</td>' +
+                '<td class="num">' + UI.money(p.base || 0) + '</td>' +
+                '<td class="num" style="color:var(--success);">' + UI.money(p.additions || 0) + '</td>' +
+                '<td class="num" style="color:var(--danger);">' + UI.money(p.deductions || 0) + '</td>' +
+                '<td class="num" style="font-weight:800;">' + UI.money(p.net || 0) + '</td>' +
+                '<td>' + (p.paid
+                    ? '<span class="badge badge-green">مدفوع</span>'
+                    : '<span class="badge badge-amber">لم يُدفع</span>') + '</td>' +
+                '<td style="text-align:left;white-space:nowrap;">' +
+                '<button class="btn btn-sm" onclick="togglePay(' + p.id + ')"><i class="fa-solid fa-check"></i></button> ' +
+                '<button class="btn btn-sm btn-danger" onclick="delPay(' + p.id + ')"><i class="fa-solid fa-trash"></i></button></td></tr>'
+            ).join('') || '<tr><td colspan="8" class="empty-state">لا توجد رواتب</td></tr>';
+        }
+
+        let currentNet = 0;
+        function openPayModal() {
+            document.getElementById('payModal').style.visibility = 'visible';
+            document.getElementById('payModal').style.opacity = '1';
+            document.getElementById('payEmp').value = '';
+            const pd = new Date(); document.getElementById('payPeriod').value = pd.getFullYear() + '-' + String(pd.getMonth() + 1).padStart(2, '0');
+            document.getElementById('payBase').value = '';
+            document.getElementById('payAdd').value = '0';
+            document.getElementById('payDeduct').value = '0';
+            recalcNet();
+        }
+        function closePayModal() {
+            document.getElementById('payModal').style.visibility = 'hidden';
+            document.getElementById('payModal').style.opacity = '0';
+        }
+        document.addEventListener('input', (ev) => {
+            if (['payBase','payAdd','payDeduct'].includes(ev.target.id)) recalcNet();
+        });
+        async function recalcNet() {
+            const empId = Number(document.getElementById('payEmp').value);
+            let base = Number(document.getElementById('payBase').value) || 0;
+            if (empId && !base) {
+                const emp = await ARDB.getById('employees', empId);
+                if (emp) { base = emp.salary || 0; document.getElementById('payBase').value = base; }
+            }
+            const add = Number(document.getElementById('payAdd').value) || 0;
+            const ded = Number(document.getElementById('payDeduct').value) || 0;
+            currentNet = base + add - ded;
+            document.getElementById('payNet').textContent = currentNet.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        }
+        document.getElementById('payEmp').addEventListener('change', recalcNet);
+
+        async function savePay() {
+            const employeeId = Number(document.getElementById('payEmp').value);
+            const period = document.getElementById('payPeriod').value;
+            if (!employeeId || !period) { UI.toast('اختر الموظف والشهر', 'warn'); return; }
+            const base = Number(document.getElementById('payBase').value) || 0;
+            const additions = Number(document.getElementById('payAdd').value) || 0;
+            const deductions = Number(document.getElementById('payDeduct').value) || 0;
+            const net = base + additions - deductions;
+            const dup = (await ARDB.getAll('payroll')).find(p => p.employeeId === employeeId && p.period === period);
+            const rec = { employeeId, period, base, additions, deductions, net, paid: false };
+            if (dup) { rec.id = dup.id; await ARDB.put('payroll', rec); UI.toast('تم التحديث', 'ok'); }
+            else { await ARDB.add('payroll', rec); UI.toast('تم الحفظ', 'ok'); }
+            closePayModal(); load();
+        }
+        async function togglePay(id) {
+            const p = await ARDB.getById('payroll', id);
+            if (!p) return;
+            const newPaidState = !p.paid;
+            await ARDB.put('payroll', Object.assign({}, p, { id, paid: newPaidState }));
+
+            if (newPaidState && p.net > 0) {
+                const emp = await ARDB.getById('employees', p.employeeId);
+                const empName = emp ? emp.name : 'موظف';
+                const date = Date.now();
+                // تسجيل مصروف الرواتب
+                await ARDB.add('expenses', {
+                    date,
+                    accountId: 18,
+                    amount: p.net,
+                    note: 'صرف راتب: ' + empName + ' (' + (p.period || '') + ')',
+                    createdAt: date
+                });
+                // قيد محاسبي
+                await ARDB.add('journalEntries', {
+                    number: await ARDB.nextSeq('journalAuto', 'JRN-', 6),
+                    date,
+                    desc: 'صرف راتب: ' + empName + ' (' + (p.period || '') + ')',
+                    lines: [
+                        { accountId: 18, debit: p.net, credit: 0 }, // حساب الرواتب والأجور
+                        { accountId: 3, debit: 0, credit: p.net }   // الصندوق
+                    ]
+                });
+            }
+
+            UI.toast('تم تحديث حالة الراتب ' + (newPaidState ? 'وخصم المصروف من الخزينة' : ''), 'ok'); load();
+        }
+        async function delPay(id) {
+            const ok = await UI.confirmBox('حذف الراتب؟');
+            if (!ok) return;
+            await ARDB.remove('payroll', id);
+            UI.toast('تم الحذف', 'ok'); load();
+        }
+        load();
+    </script>
+</body>
+</html>

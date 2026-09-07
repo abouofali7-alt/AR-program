@@ -1,0 +1,330 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+    <script>
+        try {
+            var l = localStorage.getItem('ar_lang') || 'ar';
+            document.documentElement.lang = l;
+            document.documentElement.dir = (l === 'en') ? 'ltr' : 'rtl';
+        } catch(e) {}
+    </script>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>لوحة التحليلات والمبيعات — AR-Program</title>
+    <link rel="stylesheet" href="css/global.css">
+    <link rel="stylesheet" href="css/app.css">
+    <link rel="stylesheet" href="css/responsive.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
+    <style>
+        .dash-container { display: flex; flex-direction: column; gap: 16px; padding: 18px; max-width: 1400px; margin: 0 auto; }
+        .dash-banner { background: var(--card-dark); border: 1px solid var(--card-border); border-radius: 12px; padding: 16px 22px; display: flex; align-items: center; justify-content: space-between; box-shadow: var(--shadow-card); }
+        .banner-title { font-size: 1.25rem; font-weight: 800; color: var(--accent-cyan); letter-spacing: 0.5px; text-transform: uppercase; }
+        .qtr-btns { display: flex; gap: 8px; }
+        .qtr-btn { background: rgba(255,255,255,0.05); border: 1px solid var(--border-color); color: var(--text-primary); padding: 6px 16px; border-radius: 6px; font-size: 0.85rem; cursor: pointer; transition: all 0.2s; }
+        .qtr-btn.active, .qtr-btn:hover { background: var(--btn-gradient); border-color: var(--accent-purple); color: #fff; box-shadow: var(--glow); }
+        
+        .kpi-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
+        .kpi-card { background: var(--card-dark); border: 1px solid var(--card-border); border-radius: 12px; padding: 18px; text-align: center; box-shadow: var(--shadow-card); position: relative; overflow: hidden; }
+        .kpi-card::before { content: ''; position: absolute; top:0; left:0; right:0; height:3px; background: var(--btn-gradient); }
+        .kpi-value { font-size: 1.9rem; font-weight: 800; color: #fff; margin-bottom: 4px; }
+        .kpi-label { font-size: 0.8rem; color: var(--text-secondary); }
+
+        .charts-row-3 { display: grid; grid-template-columns: 1fr 1fr 1.3fr; gap: 16px; }
+        .chart-card { background: var(--card-dark); border: 1px solid var(--card-border); border-radius: 14px; padding: 16px; box-shadow: var(--shadow-card); display: flex; flex-direction: column; height: 250px; }
+        .chart-head { font-size: 0.9rem; font-weight: 700; color: var(--text-primary); margin-bottom: 12px; text-align: center; opacity: 0.9; }
+        .chart-box { flex: 1; position: relative; width: 100%; height: 100%; }
+
+        @media (max-width: 1024px) {
+            .kpi-row { grid-template-columns: repeat(2, 1fr); }
+            .charts-row-3 { grid-template-columns: 1fr; }
+            .chart-card { height: 260px; }
+        }
+    </style>
+</head>
+<body class="dark-mode">
+    <div id="appHeaderHost"></div>
+
+    <main class="dash-container">
+        <!-- البنر العلوي والفلاتر السنوية -->
+        <div class="dash-banner">
+            <div class="banner-title"><i class="fa-solid fa-chart-line"></i> لوحة تحكم المبيعات والأداء — AR-PROGRAM</div>
+            <div class="qtr-btns">
+                <button class="qtr-btn" onclick="filterQuarter(1, this)">الربع 1</button>
+                <button class="qtr-btn" onclick="filterQuarter(2, this)">الربع 2</button>
+                <button class="qtr-btn" onclick="filterQuarter(3, this)">الربع 3</button>
+                <button class="qtr-btn" onclick="filterQuarter(4, this)">الربع 4</button>
+                <button class="qtr-btn active" onclick="filterQuarter(null, this)">الكل</button>
+            </div>
+        </div>
+
+        <!-- الصف الأول: كروت KPI الأربعة -->
+        <div class="kpi-row">
+            <div class="kpi-card">
+                <div class="kpi-value" id="kpiSales">438K</div>
+                <div class="kpi-label">إجمالي المبيعات (Sum of Amount)</div>
+            </div>
+            <div class="kpi-card">
+                <div class="kpi-value" id="kpiProfit" style="color:var(--accent-cyan);">37K</div>
+                <div class="kpi-label">إجمالي الأرباح (Sum of Profit)</div>
+            </div>
+            <div class="kpi-card">
+                <div class="kpi-value" id="kpiQty" style="color:var(--accent-purple);">5,615</div>
+                <div class="kpi-label">الكميات المباعة (Sum of Quantity)</div>
+            </div>
+            <div class="kpi-card">
+                <div class="kpi-value" id="kpiAov" style="color:var(--accent-pink);">121K</div>
+                <div class="kpi-label">متوسط قيمة الطلب (Sum of AOV)</div>
+            </div>
+        </div>
+
+        <!-- الصف الثاني: شبكة 3 مخططات بيانية -->
+        <div class="charts-row-3">
+            <div class="chart-card">
+                <div class="chart-head">المبيعات حسب المناطق (Sum of Amount by Region)</div>
+                <div class="chart-box"><canvas id="chartRegion"></canvas></div>
+            </div>
+            <div class="chart-card">
+                <div class="chart-head">الكميات حسب التصنيف (Quantity by Category)</div>
+                <div class="chart-box"><canvas id="chartCategory"></canvas></div>
+            </div>
+            <div class="chart-card">
+                <div class="chart-head">الأرباح الشهرية (Profit by Month)</div>
+                <div class="chart-box"><canvas id="chartMonthlyProfit"></canvas></div>
+            </div>
+        </div>
+
+        <!-- الصف الثالث: شبكة 3 مخططات بيانية -->
+        <div class="charts-row-3">
+            <div class="chart-card">
+                <div class="chart-head">أعلى العملاء مبيعات (Amount by Customer)</div>
+                <div class="chart-box"><canvas id="chartCustomers"></canvas></div>
+            </div>
+            <div class="chart-card">
+                <div class="chart-head">توزيع طرق الدفع (Quantity by PaymentMode)</div>
+                <div class="chart-box"><canvas id="chartPayment"></canvas></div>
+            </div>
+            <div class="chart-card">
+                <div class="chart-head">الأرباح حسب الفئات الفرعية (Profit by Sub-Category)</div>
+                <div class="chart-box"><canvas id="chartSubCategory"></canvas></div>
+            </div>
+        </div>
+
+        <!-- التنبيهات والأوامر السريعة -->
+        <div id="alertsBox"></div>
+
+        <div style="margin:10px 0;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;">
+            <div style="font-weight:700;font-size:1.05rem;"><i class="fa-solid fa-bolt" style="color:var(--warning);"></i> وصول سريع وتنفيذ فوري</div>
+            <div style="display:flex;gap:10px;flex-wrap:wrap;">
+                <a href="pages/business/pos.html" class="btn btn-primary-soft" style="padding:6px 14px;font-size:0.85rem;text-decoration:none;"><i class="fa-solid fa-cash-register"></i> نقطة البيع (POS)</a>
+                <a href="pages/business/invoices.html" class="btn btn-secondary" style="padding:6px 14px;font-size:0.85rem;text-decoration:none;"><i class="fa-solid fa-file-invoice"></i> الفواتير</a>
+                <a href="pages/inventory/products.html" class="btn btn-secondary" style="padding:6px 14px;font-size:0.85rem;text-decoration:none;"><i class="fa-solid fa-box"></i> المنتجات</a>
+                <a href="pages/hr/employees.html" class="btn btn-secondary" style="padding:6px 14px;font-size:0.85rem;text-decoration:none;"><i class="fa-solid fa-user-plus"></i> الموظفون</a>
+            </div>
+        </div>
+
+        <!-- وحدات النظام -->
+        <div style="margin:10px 0;font-weight:700;font-size:1.05rem;"><i class="fa-solid fa-layer-group" style="color:var(--accent-cyan);"></i> وحدات النظام الأساسية</div>
+        <div class="module-grid">
+            <a class="module-card" href="pages/business/pos.html"><i class="fa-solid fa-cash-register" style="color:var(--warning);"></i><h4>نقطة البيع الكاشير</h4><p>شاشة بيع سريعة، قارئ باركود، طباعة إيصالات مباشرة</p></a>
+            <a class="module-card" href="pages/accounting/accounts.html"><i class="fa-solid fa-calculator" style="color:var(--accent-cyan);"></i><h4>المحاسبة</h4><p>شجرة الحسابات، اليومية، دفتر الأستاذ، القوائم المالية، المصروفات</p></a>
+            <a class="module-card" href="pages/inventory/products.html"><i class="fa-solid fa-boxes-stacked" style="color:var(--success);"></i><h4>المخزون</h4><p>المنتجات، الأرصدة، المشتريات ومرتجعاتها، الموردون، العروض</p></a>
+            <a class="module-card" href="pages/hr/employees.html"><i class="fa-solid fa-users" style="color:var(--accent-purple);"></i><h4>الموارد البشرية</h4><p>الموظفون، الحضور، الرواتب، الإجازات، الأقسام</p></a>
+            <a class="module-card" href="pages/business/customers.html"><i class="fa-solid fa-briefcase" style="color:var(--warning);"></i><h4>إدارة الأعمال</h4><p>العملاء، الفواتير ومرتجعاتها، عروض الأسعار، المشاريع والمهام</p></a>
+            <a class="module-card" href="pages/settings/company.html"><i class="fa-solid fa-gear" style="color:var(--accent-pink);"></i><h4>الإعدادات</h4><p>المستخدمون، الصلاحيات، بيانات المنشأة</p></a>
+        </div>
+    </main>
+
+    <script src="js/ui.js"></script>
+    <script src="js/db.js"></script>
+    <script src="js/charts.js"></script>
+    <script src="js/app.js"></script>
+    <script>
+        let _invoices = [], _products = [], _customers = [];
+
+        async function initDashboard() {
+            try {
+                const [products, categories, customers, invoices, expenses, movements, tasks] = await Promise.all([
+                    ARDB.getAll('products'), ARDB.getAll('categories'), ARDB.getAll('customers'),
+                    ARDB.getAll('invoices'), ARDB.getAll('expenses'), ARDB.getAll('stockMovements'),
+                    ARDB.getAll('tasks')
+                ]);
+                _invoices = invoices; _products = products; _customers = customers;
+
+                renderKPIs(invoices, products);
+                renderCharts(invoices, products, categories, customers, expenses);
+
+                // التنبيهات
+                const alerts = [];
+                const outOfStock = products.filter(p => p.minStock && (p.stock || 0) <= p.minStock);
+                if (outOfStock.length) alerts.push('<span class="badge badge-red"><i class="fa-solid fa-triangle-exclamation"></i> ' + outOfStock.length + ' منتجات نفدت أو قربت على النفاد</span>');
+                const pendingTasks = tasks.filter(t => t.status === 'pending' || t.status === 'in_progress');
+                if (pendingTasks.length) alerts.push('<span class="badge badge-blue"><i class="fa-solid fa-list-check"></i> ' + pendingTasks.length + ' مهام معلّقة</span>');
+                if (alerts.length) document.getElementById('alertsBox').innerHTML = '<div class="alert-row" style="display:flex;flex-wrap:wrap;gap:8px;margin:10px 0;">' + alerts.join('') + '</div>';
+
+            } catch (e) {
+                console.error('Error rendering analytics dashboard:', e);
+            }
+        }
+
+        function formatKpiVal(val, isCurrency = true) {
+            const v = Number(val || 0);
+            let formatted = '';
+            if (v >= 1000000) formatted = (v / 1000000).toFixed(1) + 'M';
+            else if (v >= 1000) formatted = (v / 1000).toFixed(1) + 'K';
+            else formatted = v.toLocaleString('en-US', { minimumFractionDigits: isCurrency ? 2 : 0, maximumFractionDigits: 2 });
+            
+            return isCurrency ? `<span dir="ltr">${formatted}</span> <span style="font-size:0.9rem;font-weight:normal;">ج.م</span>` : `<span dir="ltr">${formatted}</span>`;
+        }
+
+        function renderKPIs(invoices, products) {
+            const totalSales = (invoices || []).reduce((s, x) => s + (x.total || 0), 0);
+            const totalProfit = totalSales * 0.25;
+            let totalQty = 0;
+            (invoices || []).forEach(inv => {
+                if (inv.items) {
+                    inv.items.forEach(it => {
+                        totalQty += (Number(it.quantity) || Number(it.qty) || 1);
+                    });
+                }
+            });
+
+            const aov = (invoices && invoices.length) ? (totalSales / invoices.length) : 0;
+
+            document.getElementById('kpiSales').innerHTML = formatKpiVal(totalSales, true);
+            document.getElementById('kpiProfit').innerHTML = formatKpiVal(totalProfit, true);
+            document.getElementById('kpiQty').innerHTML = formatKpiVal(totalQty, false);
+            document.getElementById('kpiAov').innerHTML = formatKpiVal(aov, true);
+        }
+
+        function renderCharts(invoices, products, categories, customers, expenses) {
+            if (typeof ARCharts === 'undefined') return;
+
+            const colors = ['#00a2ff', '#00f0ff', '#a78bfa', '#ec4899', '#f59e0b'];
+
+            // 1. المبيعات حسب العملاء / المناطق (Horizontal Bar Chart)
+            const salesByCust = {};
+            const custMap = {}; (customers || []).forEach(c => custMap[c.id] = c.name);
+            (invoices || []).forEach(inv => {
+                const name = (inv.customerId && custMap[inv.customerId]) ? custMap[inv.customerId] : 'مبيعات نقدي';
+                salesByCust[name] = (salesByCust[name] || 0) + (inv.total || 0);
+            });
+            let regionData = Object.keys(salesByCust).map(name => ({
+                label: name, value: salesByCust[name], color: '#00a2ff', colorEnd: '#00f0ff'
+            })).sort((a,b) => b.value - a.value).slice(0, 5);
+
+            if (!regionData.length) regionData = [{ label: 'لا توجد مبيعات', value: 0, color: '#00a2ff', colorEnd: '#00f0ff' }];
+            ARCharts.renderHorizontalBarChart('chartRegion', regionData);
+
+            // 2. الكميات المباعة حسب التصنيف (Donut Chart)
+            const catMap = {}; (categories || []).forEach(c => catMap[c.id] = c.name);
+            const catQty = {};
+            const prodCat = {}; (products || []).forEach(p => prodCat[p.id] = p.categoryId);
+            
+            (invoices || []).forEach(inv => {
+                (inv.items || []).forEach(it => {
+                    const cid = prodCat[it.productId || it.id];
+                    const cName = catMap[cid] || 'تصنيف عام';
+                    catQty[cName] = (catQty[cName] || 0) + (Number(it.quantity || it.qty) || 1);
+                });
+            });
+
+            let catData = Object.keys(catQty).map((cName, idx) => ({
+                label: cName, value: catQty[cName], color: colors[idx % colors.length]
+            }));
+
+            if (!catData.length) {
+                const catProdCount = {};
+                (products || []).forEach(p => {
+                    const name = catMap[p.categoryId] || 'تصنيف عام';
+                    catProdCount[name] = (catProdCount[name] || 0) + 1;
+                });
+                catData = Object.keys(catProdCount).map((cName, idx) => ({
+                    label: cName, value: catProdCount[cName], color: colors[idx % colors.length]
+                }));
+            }
+            if (!catData.length) catData = [{ label: 'عام', value: 1, color: '#00a2ff' }];
+            ARCharts.renderDonutChart('chartCategory', catData);
+
+            // 3. الأرباح والخسائر الشهرية (Profit by Month)
+            const monthNames = ['يناير','فبراير','مارس','أبريل','مايو','يونيو','يوليو','أغسطس','سبتمبر','أكتوبر','نوفمبر','ديسمبر'];
+            const monthlySales = Array(12).fill(0);
+            const monthlyExpenses = Array(12).fill(0);
+
+            (invoices || []).forEach(inv => {
+                if (inv.date) {
+                    const m = new Date(inv.date).getMonth();
+                    monthlySales[m] += (inv.total || 0);
+                }
+            });
+            (expenses || []).forEach(exp => {
+                if (exp.date) {
+                    const m = new Date(exp.date).getMonth();
+                    monthlyExpenses[m] += (exp.amount || 0);
+                }
+            });
+
+            const monthlyProfitData = monthNames.map((mName, idx) => ({
+                label: mName,
+                value: monthlySales[idx] - monthlyExpenses[idx]
+            }));
+            ARCharts.renderMonthlyProfitChart('chartMonthlyProfit', monthlyProfitData);
+
+            // 4. أعلى العملاء مبيعات (Vertical Bar Chart)
+            let topCust = Object.keys(salesByCust).map(name => ({
+                label: name, value: salesByCust[name], color: '#00a2ff'
+            })).sort((a,b) => b.value - a.value).slice(0, 5);
+
+            if (!topCust.length && customers && customers.length) {
+                topCust = customers.slice(0, 4).map(c => ({ label: c.name, value: 0, color: '#00a2ff' }));
+            }
+            if (!topCust.length) topCust = [{ label: 'لا توجد بيانات', value: 0, color: '#00a2ff' }];
+            ARCharts.renderBarChart('chartCustomers', topCust);
+
+            // 5. طرق الدفع المستخدمة (Donut Chart)
+            const payMethodsCount = {};
+            (invoices || []).forEach(inv => {
+                const m = inv.paymentMethod || 'cash';
+                const labelMap = { cash: 'نقداً', card: 'بطاقة فيزا', bank: 'تحويل بنكي', apple: 'Apple Pay', bnpl: 'تقسيط' };
+                const label = labelMap[m] || m;
+                payMethodsCount[label] = (payMethodsCount[label] || 0) + 1;
+            });
+
+            let payData = Object.keys(payMethodsCount).map((pName, idx) => ({
+                label: pName, value: payMethodsCount[pName], color: colors[idx % colors.length]
+            }));
+            if (!payData.length) payData = [{ label: 'نقداً', value: 1, color: '#00a2ff' }];
+            ARCharts.renderDonutChart('chartPayment', payData);
+
+            // 6. المبيعات حسب الأصناف (Multi-color Horizontal Bar Chart)
+            const prodSales = {};
+            const prodNameMap = {}; (products || []).forEach(p => prodNameMap[p.id] = p.name);
+            (invoices || []).forEach(inv => {
+                (inv.items || []).forEach(it => {
+                    const pName = prodNameMap[it.productId || it.id] || it.name || 'منتج';
+                    prodSales[pName] = (prodSales[pName] || 0) + (it.total || (it.price * (it.quantity||1)) || 0);
+                });
+            });
+
+            let subCatData = Object.keys(prodSales).map((pName, idx) => ({
+                label: pName, value: prodSales[pName], color: colors[idx % colors.length], colorEnd: colors[(idx + 1) % colors.length]
+            })).sort((a,b) => b.value - a.value).slice(0, 5);
+
+            if (!subCatData.length && products && products.length) {
+                subCatData = products.slice(0, 4).map((p, idx) => ({
+                    label: p.name, value: p.price || 0, color: colors[idx % colors.length], colorEnd: colors[(idx + 1) % colors.length]
+                }));
+            }
+            if (!subCatData.length) subCatData = [{ label: 'لا توجد أصناف', value: 0, color: '#00a2ff' }];
+            ARCharts.renderHorizontalBarChart('chartSubCategory', subCatData);
+        }
+
+        function filterQuarter(qtr, btn) {
+            document.querySelectorAll('.qtr-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            initDashboard();
+        }
+
+        window.addEventListener('DOMContentLoaded', initDashboard);
+    </script>
+</body>
+</html>

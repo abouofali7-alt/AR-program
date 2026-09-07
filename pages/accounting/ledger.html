@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>دفتر الأستاذ — AR-Program</title>
+    <link rel="stylesheet" href="../../css/global.css">
+    <link rel="stylesheet" href="../../css/app.css">
+    <link rel="stylesheet" href="../../css/responsive.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
+</head>
+<body class="dark-mode">
+    <div id="appHeaderHost"></div>
+    <main class="pagewrap" style="padding:22px;max-width:1200px;margin:0 auto;">
+        <div class="page-head">
+            <div>
+                <h2>دفتر الأستاذ</h2>
+                <div class="sub">رصيد كل حساب من القيود</div>
+            </div>
+            <div class="page-actions">
+                <div class="form-item" style="margin:0;min-width:260px;">
+                    <select id="accountSel" style="padding:10px;border-radius:9px;border:1px solid var(--border-color);background:var(--card-hover);color:var(--text-primary);">
+                        <option value="">— اختر حسابًا —</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+        <div id="ledgerResult"></div>
+    </main>
+
+    <script src="../../js/ui.js"></script>
+    <script src="../../js/db.js"></script>
+    <script src="../../js/app.js"></script>
+    <script>
+        async function loadAccounts() {
+            const accounts = await ARDB.getAll('accounts');
+            const sel = document.getElementById('accountSel');
+            sel.innerHTML = '<option value="">— اختر حسابًا —</option>' + accounts
+                .filter(a => a.type && a.type !== 'asset' || a.type === 'asset')
+                .sort((x, y) => x.code.localeCompare(y.code, 'en'))
+                .map(a => '<option value="' + a.id + '">' + a.code + ' — ' + a.name + '</option>')
+                .join('');
+            sel.addEventListener('change', () => showLedger(Number(sel.value)));
+        }
+
+        async function showLedger(accountId) {
+            const div = document.getElementById('ledgerResult');
+            if (!accountId) { div.innerHTML = '<div class="empty-state">اختر حسابًا لعرض حركاته</div>'; return; }
+            const entries = (await ARDB.getAll('journalEntries')).sort((a, b) => (a.date || 0) - (b.date || 0));
+            const account = await ARDB.getById('accounts', accountId);
+
+            let balance = 0;
+            let html = '<div class="table-card" style="margin-top:6px;">' +
+                '<div class="table-head">' + account.code + ' — ' + account.name +
+                ' <span class="badge badge-blue">الرصيد النهائي: ' + UI.money(0) + '</span></div>' +
+                '<div class="table-scroll"><table class="data-table">' +
+                '<thead><tr><th>الرقم</th><th>التاريخ</th><th>البيان</th><th>مدين</th><th>دائن</th><th>الرصيد</th></tr></thead><tbody>';
+
+            entries.forEach(en => {
+                en.lines.forEach(l => {
+                    if (l.accountId === accountId) {
+                        balance += (l.debit || 0) - (l.credit || 0);
+                        html += '<tr>' +
+                            '<td class="num">' + en.number + '</td>' +
+                            '<td>' + UI.date(en.date) + '</td>' +
+                            '<td>' + en.desc + '</td>' +
+                            '<td class="num">' + UI.money(l.debit || 0) + '</td>' +
+                            '<td class="num">' + UI.money(l.credit || 0) + '</td>' +
+                            '<td class="num" style="font-weight:700;">' + UI.money(balance) + '</td></tr>';
+                    }
+                });
+            });
+
+            html += '</tbody></table></div></div>';
+            html = html.replace('UI.money(0)</span>', UI.money(balance) + '</span>');
+            div.innerHTML = html;
+        }
+
+        loadAccounts();
+    </script>
+</body>
+</html>

@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>المصروفات — AR-Program</title>
+    <link rel="stylesheet" href="../../css/global.css">
+    <link rel="stylesheet" href="../../css/app.css">
+    <link rel="stylesheet" href="../../css/responsive.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
+</head>
+<body class="dark-mode">
+    <div id="appHeaderHost"></div>
+    <main class="pagewrap" style="padding:22px;max-width:1200px;margin:0 auto;">
+        <div class="page-head">
+            <div>
+                <h2>المصروفات</h2>
+                <div class="sub">تسجيل المصاريف مع قيود اليومية تلقائيًا</div>
+            </div>
+            <div class="page-actions">
+                <button class="btn btn-primary-soft" onclick="openExpModal()"><i class="fa-solid fa-plus"></i> مصروف جديد</button>
+            </div>
+        </div>
+        <div class="stat-grid">
+            <div class="stat-card"><div class="label">إجمالي المصروفات</div><div class="value red" id="expTotal">0.00</div></div>
+            <div class="stat-card"><div class="label">عدد السجلات</div><div class="value cyan" id="expCount">0</div></div>
+        </div>
+        <div class="table-card">
+            <div class="table-head">سجل المصروفات</div>
+            <div class="table-scroll">
+                <table class="data-table">
+                    <thead><tr><th>التاريخ</th><th>الحساب</th><th>البيان</th><th>المبلغ</th><th></th></tr></thead>
+                    <tbody id="expBody"></tbody>
+                </table>
+            </div>
+        </div>
+    </main>
+
+    <div id="expModal" class="modal-mask" style="visibility:hidden;opacity:0;">
+        <div class="modal-box">
+            <h3>مصروف جديد</h3>
+            <div class="form-grid">
+                <div class="form-item"><label>التاريخ</label><input type="date" id="expDate"></div>
+                <div class="form-item"><label>الحساب</label><select id="expAccount"></select></div>
+                <div class="form-item" style="grid-column:1/-1;"><label>البيان</label><input id="expNote"></div>
+                <div class="form-item"><label>المبلغ</label><input type="number" id="expAmount" step="0.01" min="0"></div>
+            </div>
+            <div style="display:flex;gap:10px;justify-content:flex-end;">
+                <button class="btn btn-secondary" onclick="closeExpModal()">إلغاء</button>
+                <button class="btn btn-primary-soft" onclick="saveExpense()">حفظ</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="../../js/ui.js"></script>
+    <script src="../../js/db.js"></script>
+    <script src="../../js/app.js"></script>
+    <script>
+        async function load() {
+            const expenses = (await ARDB.getAll('expenses')).sort((a, b) => (b.date || 0) - (a.date || 0));
+            const accounts = await ARDB.getAll('accounts');
+            const accById = {}; accounts.forEach(a => accById[a.id] = a);
+
+            const total = expenses.reduce((s, e) => s + (e.amount || 0), 0);
+            document.getElementById('expTotal').innerHTML = UI.money(total);
+            document.getElementById('expCount').textContent = expenses.length;
+
+            document.getElementById('expBody').innerHTML = expenses.map(e =>
+                '<tr><td>' + UI.date(e.date) + '</td>' +
+                '<td>' + (accById[e.accountId] ? accById[e.accountId].name : '—') + '</td>' +
+                '<td>' + (e.note || '—') + '</td>' +
+                '<td class="num" style="font-weight:700;color:var(--danger);">' + UI.money(e.amount) + '</td>' +
+                '<td style="text-align:left;"><button class="btn btn-sm btn-danger" onclick="delExpense(' + e.id + ')"><i class="fa-solid fa-trash"></i></button></td></tr>'
+            ).join('') || '<tr><td colspan="5" class="empty-state">لا توجد مصروفات</td></tr>';
+
+            const sel = document.getElementById('expAccount');
+            sel.innerHTML = accounts.filter(a => a.type === 'expense').map(a => '<option value="' + a.id + '">' + a.name + ' (' + a.code + ')</option>').join('') || '<option value="">— لا توجد حسابات مصروفات —</option>';
+        }
+        function openExpModal() {
+            document.getElementById('expModal').style.visibility = 'visible';
+            document.getElementById('expModal').style.opacity = '1';
+            document.getElementById('expDate').value = UI.todayInput();
+            document.getElementById('expNote').value = '';
+            document.getElementById('expAmount').value = '';
+        }
+        function closeExpModal() {
+            document.getElementById('expModal').style.visibility = 'hidden';
+            document.getElementById('expModal').style.opacity = '0';
+        }
+        async function saveExpense() {
+            const date = new Date(document.getElementById('expDate').value + 'T12:00:00').getTime();
+            const accountId = Number(document.getElementById('expAccount').value);
+            const amount = Number(document.getElementById('expAmount').value) || 0;
+            const note = document.getElementById('expNote').value.trim();
+            if (amount <= 0) { UI.toast('أدخل مبلغًا صحيحًا', 'warn'); return; }
+            if (!accountId) { UI.toast('اختر حساب المصروف', 'warn'); return; }
+
+            await ARDB.add('expenses', { date, accountId, amount, note, createdAt: Date.now() });
+            await ARDB.add('journalEntries', {
+                number: await ARDB.nextSeq('journalAuto', 'JRN-', 6),
+                date, desc: 'مصروف: ' + (note || 'بدون بيان'),
+                lines: [
+                    { accountId: accountId, debit: amount, credit: 0 },
+                    { accountId: 3, debit: 0, credit: amount }
+                ]
+            });
+            UI.toast('تم تسجيل المصروف', 'ok');
+            closeExpModal(); load();
+        }
+        async function delExpense(id) {
+            const ok = await UI.confirmBox('حذف المصروف؟ (لن يُحذف القيد المرتبط)');
+            if (!ok) return;
+            await ARDB.remove('expenses', id);
+            UI.toast('تم الحذف', 'ok'); load();
+        }
+        load();
+    </script>
+</body>
+</html>

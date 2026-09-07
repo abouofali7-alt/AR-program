@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>شجرة الحسابات — AR-Program</title>
+    <link rel="stylesheet" href="../../css/global.css">
+    <link rel="stylesheet" href="../../css/app.css">
+    <link rel="stylesheet" href="../../css/responsive.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
+</head>
+<body class="dark-mode">
+    <div id="appHeaderHost"></div>
+    <main class="pagewrap" style="padding:22px;max-width:1200px;margin:0 auto;">
+        <div class="page-head">
+            <div>
+                <h2>شجرة الحسابات</h2>
+                <div class="sub">إدارة مخطط الحسابات المحاسبي</div>
+            </div>
+            <div class="page-actions">
+                <button class="btn btn-primary-soft" onclick="openAccountModal()"><i class="fa-solid fa-plus"></i> إضافة حساب</button>
+            </div>
+        </div>
+        <div class="table-card">
+            <div class="table-head">الحسابات</div>
+            <div class="table-scroll">
+                <table class="data-table">
+                    <thead><tr><th>الكود</th><th>اسم الحساب</th><th>النوع</th><th>الأصل</th><th></th></tr></thead>
+                    <tbody id="accountsBody"></tbody>
+                </table>
+            </div>
+        </div>
+    </main>
+
+    <!-- Modal -->
+    <div id="accountModal" class="modal-mask" style="visibility:hidden;opacity:0;">
+        <div class="modal-box">
+            <h3 id="accountModalTitle">إضافة حساب</h3>
+            <div class="form-grid">
+                <div class="form-item"><label>الكود</label><input id="accCode" placeholder="1101"></div>
+                <div class="form-item"><label>اسم الحساب</label><input id="accName"></div>
+                <div class="form-item"><label>النوع</label>
+                    <select id="accType">
+                        <option value="asset">أصل</option>
+                        <option value="liability">التزام</option>
+                        <option value="equity">ملكية</option>
+                        <option value="income">إيراد</option>
+                        <option value="expense">مصروف</option>
+                    </select>
+                </div>
+                <div class="form-item"><label>حساب أبوي</label><select id="accParent"><option value="">— لا شيء —</option></select></div>
+            </div>
+            <div style="display:flex;gap:10px;justify-content:flex-end;">
+                <button class="btn btn-secondary" onclick="closeAccountModal()">إلغاء</button>
+                <button class="btn btn-primary-soft" onclick="saveAccount()">حفظ</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="../../js/ui.js"></script>
+    <script src="../../js/db.js"></script>
+    <script src="../../js/app.js"></script>
+    <script>
+        let editingId = null;
+
+        const TYPE_NAMES = { asset: 'أصل', liability: 'التزام', equity: 'ملكية', income: 'إيراد', expense: 'مصروف' };
+
+        async function load() {
+            const accounts = await ARDB.getAll('accounts');
+            const body = document.getElementById('accountsBody');
+            const parentSel = document.getElementById('accParent');
+            parentSel.innerHTML = '<option value="">— لا شيء —</option>' + accounts.filter(a => !a.parentId).map(a => '<option value="' + a.id + '">' + a.code + ' — ' + a.name + '</option>').join('');
+
+            const byId = {};
+            accounts.forEach(a => byId[a.id] = a);
+
+            accounts.sort((a, b) => a.code.localeCompare(b.code, 'en'));
+            body.innerHTML = accounts.map(a => {
+                const parent = a.parentId ? byId[a.parentId] : null;
+                const typeColor = { asset: 'badge-blue', liability: 'badge-amber', equity: 'badge-purple', income: 'badge-green', expense: 'badge-red' }[a.type] || '';
+                return '<tr>' +
+                    '<td class="num">' + a.code + '</td>' +
+                    '<td>' + a.name + '</td>' +
+                    '<td><span class="badge ' + typeColor + '">' + (TYPE_NAMES[a.type] || a.type) + '</span></td>' +
+                    '<td>' + (parent ? parent.name : '—') + '</td>' +
+                    '<td style="text-align:left;white-space:nowrap;">' +
+                        '<button class="btn btn-sm" onclick="editAccount(' + a.id + ')"><i class="fa-solid fa-pen"></i></button> ' +
+                        '<button class="btn btn-sm btn-danger" onclick="delAccount(' + a.id + ')"><i class="fa-solid fa-trash"></i></button>' +
+                    '</td></tr>';
+            }).join('') || '<tr><td colspan="5" class="empty-state">لا توجد حسابات</td></tr>';
+        }
+
+        function openAccountModal() {
+            editingId = null;
+            document.getElementById('accountModalTitle').textContent = 'إضافة حساب';
+            document.getElementById('accCode').value = '';
+            document.getElementById('accName').value = '';
+            document.getElementById('accType').value = '';
+            document.getElementById('accParent').value = '';
+            document.getElementById('accountModal').style.visibility = 'visible';
+            document.getElementById('accountModal').style.opacity = '1';
+        }
+        function closeAccountModal() {
+            document.getElementById('accountModal').style.visibility = 'hidden';
+            document.getElementById('accountModal').style.opacity = '0';
+        }
+        async function editAccount(id) {
+            const a = await ARDB.getById('accounts', id);
+            if (!a) return;
+            editingId = id;
+            document.getElementById('accountModalTitle').textContent = 'تعديل حساب';
+            document.getElementById('accCode').value = a.code;
+            document.getElementById('accName').value = a.name;
+            document.getElementById('accType').value = a.type;
+            document.getElementById('accParent').value = a.parentId || '';
+            document.getElementById('accountModal').style.visibility = 'visible';
+            document.getElementById('accountModal').style.opacity = '1';
+        }
+        async function saveAccount() {
+            const code = document.getElementById('accCode').value.trim();
+            const name = document.getElementById('accName').value.trim();
+            const type = document.getElementById('accType').value;
+            const parentId = document.getElementById('accParent').value ? Number(document.getElementById('accParent').value) : null;
+            if (!code || !name) { UI.toast('الكود والاسم مطلوبان', 'warn'); return; }
+            const existing = await ARDB.getAll('accounts');
+            const dup = existing.find(a => a.code === code && a.id !== editingId);
+            if (dup) { UI.toast('الكود موجود مسبقًا', 'error'); return; }
+            const rec = { code, name, type, parentId };
+            if (editingId) { rec.id = editingId; await ARDB.put('accounts', rec); UI.toast('تم التعديل', 'ok'); }
+            else { await ARDB.add('accounts', rec); UI.toast('تمت الإضافة', 'ok'); }
+            closeAccountModal();
+            load();
+        }
+        async function delAccount(id) {
+            const ok = await UI.confirmBox('هل تريد حذف هذا الحساب؟');
+            if (!ok) return;
+            await ARDB.remove('accounts', id);
+            UI.toast('تم الحذف', 'ok');
+            load();
+        }
+
+        load();
+    </script>
+</body>
+</html>

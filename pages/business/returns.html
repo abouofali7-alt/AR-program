@@ -1,0 +1,179 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>مرتجعات المبيعات — AR-Program</title>
+    <link rel="stylesheet" href="../../css/global.css">
+    <link rel="stylesheet" href="../../css/app.css">
+    <link rel="stylesheet" href="../../css/responsive.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
+</head>
+<body class="dark-mode">
+    <div id="appHeaderHost"></div>
+    <main class="pagewrap" style="padding:22px;max-width:1200px;margin:0 auto;">
+        <div class="page-head">
+            <div>
+                <h2>مرتجعات المبيعات</h2>
+                <div class="sub">إرجاع أصناف من فواتير بيع وإعادتها للمخزون</div>
+            </div>
+            <div class="page-actions">
+                <button class="btn btn-primary-soft" onclick="openRetModal()"><i class="fa-solid fa-plus"></i> مرتجع جديد</button>
+            </div>
+        </div>
+        <div class="table-card">
+            <div class="table-head">سجل المرتجعات</div>
+            <div class="table-scroll">
+                <table class="data-table">
+                    <thead><tr><th>الرقم</th><th>التاريخ</th><th>الفاتورة</th><th>عدد الأصناف</th><th>الإجمالي</th><th></th></tr></thead>
+                    <tbody id="retBody"></tbody>
+                </table>
+            </div>
+        </div>
+    </main>
+
+    <div id="retModal" class="modal-mask" style="visibility:hidden;opacity:0;">
+        <div class="modal-box" style="width:min(820px,94vw);">
+            <h3>مرتجع مبيعات</h3>
+            <div class="form-grid">
+                <div class="form-item"><label>التاريخ</label><input type="date" id="retDate"></div>
+                <div class="form-item"><label>فاتورة البيع</label><select id="retInvoice" onchange="onPickInvoice()"></select></div>
+                <div class="form-item" style="grid-column:1/-1;"><label>ملاحظة</label><input id="retNote"></div>
+            </div>
+            <div class="table-scroll" style="margin-bottom:12px;">
+                <table class="data-table">
+                    <thead><tr><th>المنتج</th><th>الكمية المباعة</th><th>الكمية المرتجعة</th><th>سعر البيع</th><th>الإجمالي</th></tr></thead>
+                    <tbody id="retLinesBody"></tbody>
+                </table>
+            </div>
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+                <span>الإجمالي: <b id="retTotal">0.00</b></span>
+            </div>
+            <div style="display:flex;gap:10px;justify-content:flex-end;">
+                <button class="btn btn-secondary" onclick="closeRetModal()">إلغاء</button>
+                <button class="btn btn-primary-soft" onclick="saveReturn()">حفظ المرتجع</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="../../js/ui.js"></script>
+    <script src="../../js/db.js"></script>
+    <script src="../../js/app.js"></script>
+    <script>
+        let pickedInvoice = null;
+        const salesAcc = 11, cashAcc = 3;
+
+        async function load() {
+            const [ret, invoices, customers] = await Promise.all([ARDB.getAll('invoiceReturns'), ARDB.getAll('invoices'), ARDB.getAll('customers')]);
+            const custById = {}; customers.forEach(c => custById[c.id] = c);
+            const sorted = ret.sort((a, b) => (b.date || 0) - (a.date || 0));
+            document.getElementById('retBody').innerHTML = sorted.map(r =>
+                '<tr><td class="num" style="font-weight:700;">' + r.number + '</td>' +
+                '<td>' + UI.date(r.date) + '</td>' +
+                '<td>' + (r.invoiceNumber || '—') + '</td>' +
+                '<td class="num">' + r.items.length + '</td>' +
+                '<td class="num" style="font-weight:700;color:var(--danger);">' + UI.money(r.total) + '</td>' +
+                '<td style="text-align:left;"><button class="btn btn-sm btn-danger" onclick="delReturn(' + r.id + ')"><i class="fa-solid fa-trash"></i></button></td></tr>'
+            ).join('') || '<tr><td colspan="6" class="empty-state">لا توجد مرتجعات</td></tr>';
+
+            const sel = document.getElementById('retInvoice');
+            sel.innerHTML = '<option value="">— اختر فاتورة —</option>' + invoices.map(inv =>
+                '<option value="' + inv.id + '">' + inv.number + ' — ' + (inv.customerId && custById[inv.customerId] ? custById[inv.customerId].name : 'بدون عميل') + '</option>').join('');
+        }
+
+        async function openRetModal() {
+            document.getElementById('retModal').style.visibility = 'visible';
+            document.getElementById('retModal').style.opacity = '1';
+            document.getElementById('retDate').value = UI.todayInput();
+            document.getElementById('retNote').value = '';
+            document.getElementById('retLinesBody').innerHTML = '<tr><td colspan="5" class="empty-state">اختر فاتورة أولًا</td></tr>';
+            document.getElementById('retTotal').textContent = '0.00';
+            pickedInvoice = null;
+            await load();
+        }
+        function closeRetModal() {
+            document.getElementById('retModal').style.visibility = 'hidden';
+            document.getElementById('retModal').style.opacity = '0';
+        }
+        function onPickInvoice() {
+            const id = Number(document.getElementById('retInvoice').value);
+            loadInvLines(id);
+        }
+        async function loadInvLines(id) {
+            if (!id) { document.getElementById('retLinesBody').innerHTML = '<tr><td colspan="5" class="empty-state">اختر فاتورة أولًا</td></tr>'; recalcRet(); return; }
+            pickedInvoice = await ARDB.getById('invoices', id);
+            if (!pickedInvoice) return;
+            const products = await ARDB.getAll('products');
+            const pById = {}; products.forEach(p => pById[p.id] = p);
+            document.getElementById('retLinesBody').innerHTML = pickedInvoice.items.map((it, i) =>
+                '<tr>' +
+                '<td>' + (pById[it.productId] ? pById[it.productId].name : 'صنف ' + it.productId) + '</td>' +
+                '<td class="num">' + it.quantity + '</td>' +
+                '<td><input type="number" min="0" max="' + it.quantity + '" value="' + it.quantity + '" class="ret-qty" data-price="' + it.price + '" style="width:70px;padding:8px;border-radius:8px;border:1px solid var(--border-color);background:var(--card-hover);color:var(--text-primary);" oninput="recalcRet()"></td>' +
+                '<td class="num">' + UI.money(it.price) + '</td>' +
+                '<td class="num ret-sub" style="font-weight:700;">' + UI.money(it.quantity * it.price) + '</td>' +
+                '</tr>'
+            ).join('');
+            recalcRet();
+        }
+        function recalcRet() {
+            let total = 0;
+            document.querySelectorAll('#retLinesBody tr').forEach(tr => {
+                const q = tr.querySelector('.ret-qty');
+                const sub = tr.querySelector('.ret-sub');
+                if (q && sub) {
+                    const v = (Number(q.value) || 0) * (Number(q.dataset.price) || 0);
+                    total += v;
+                    sub.innerHTML = UI.money(v);
+                }
+            });
+            document.getElementById('retTotal').innerHTML = UI.money(total);
+        }
+
+        async function saveReturn() {
+            if (!pickedInvoice) { UI.toast('اختر فاتورة البيع', 'warn'); return; }
+            const date = new Date(document.getElementById('retDate').value + 'T12:00:00').getTime();
+            const note = document.getElementById('retNote').value.trim();
+            const items = [];
+            let total = 0;
+            let anyQty = false;
+            pickedInvoice.items.forEach((it, i) => {
+                const qEl = document.querySelectorAll('.ret-qty')[i];
+                const q = qEl ? (Number(qEl.value) || 0) : 0;
+                if (q < 0 || q > it.quantity) { UI.toast('كمية مرتجعة أكبر من المباعة', 'error'); anyQty = false; total = -1; return; }
+                if (q > 0) { items.push({ productId: it.productId, quantity: q, price: it.price, total: q * it.price }); total += q * it.price; anyQty = true; }
+            });
+            if (total < 0) return;
+            if (!anyQty) { UI.toast('حدد كمية مرتجعة واحدة على الأقل', 'warn'); return; }
+
+            const number = await ARDB.nextSeq('invoiceReturn', 'RET-', 6);
+            await ARDB.add('invoiceReturns', { number, date, invoiceId: pickedInvoice.id, invoiceNumber: pickedInvoice.number, customerId: pickedInvoice.customerId, items, total, note, createdAt: Date.now() });
+
+            // إعادة الأصناف للمخزون
+            for (const it of items) {
+                await ARDB.add('stockMovements', { date, productId: it.productId, direction: 'in', type: 'return_sale', quantity: it.quantity, note: 'مرتجع ' + number });
+            }
+            // قيد: إلغاء إيراد البيع
+            if (total > 0) {
+                await ARDB.add('journalEntries', {
+                    number: await ARDB.nextSeq('journalAuto', 'JRN-', 6),
+                    date, desc: 'مرتجع مبيعات ' + number,
+                    lines: [
+                        { accountId: salesAcc, debit: total, credit: 0 },
+                        { accountId: cashAcc, debit: 0, credit: total }
+                    ]
+                });
+            }
+            UI.toast('تم حفظ المرتجع ' + number, 'ok');
+            closeRetModal(); load();
+        }
+        async function delReturn(id) {
+            const ok = await UI.confirmBox('حذف المرتجع؟ (لن تُعدل حركات المخزون)');
+            if (!ok) return;
+            await ARDB.remove('invoiceReturns', id);
+            UI.toast('تم الحذف', 'ok'); load();
+        }
+        load();
+    </script>
+</body>
+</html>

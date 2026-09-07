@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>الأرصدة — AR-Program</title>
+    <link rel="stylesheet" href="../../css/global.css">
+    <link rel="stylesheet" href="../../css/app.css">
+    <link rel="stylesheet" href="../../css/responsive.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
+</head>
+<body class="dark-mode">
+    <div id="appHeaderHost"></div>
+    <main class="pagewrap" style="padding:22px;max-width:1200px;margin:0 auto;">
+        <div class="page-head">
+            <div>
+                <h2>أرصدة المخزون</h2>
+                <div class="sub">الكمية المتاحة الحالية لكل منتج</div>
+            </div>
+        </div>
+        <div class="stat-grid">
+            <div class="stat-card"><div class="label">إجمالي المنتجات</div><div class="value cyan" id="stTotal">0</div></div>
+            <div class="stat-card"><div class="label">منتجات منخفضة</div><div class="value red" id="stLow">0</div></div>
+            <div class="stat-card"><div class="label">قيمة المخزون (تكلفة)</div><div class="value purple" id="stValue">0</div></div>
+        </div>
+        <div class="table-card">
+            <div class="table-head">الأرصدة</div>
+            <div class="table-scroll">
+                <table class="data-table">
+                    <thead><tr><th>المنتج</th><th>التصنيف</th><th>الكمية المتاحة</th><th>الحد الأدنى</th><th>قيمة الرصيد</th><th>الحالة</th></tr></thead>
+                    <tbody id="stockBody"></tbody>
+                </table>
+            </div>
+        </div>
+    </main>
+
+    <script src="../../js/ui.js"></script>
+    <script src="../../js/db.js"></script>
+    <script src="../../js/app.js"></script>
+    <script>
+        async function load() {
+            const [categories, products, movements, warehouses] = await Promise.all([
+                ARDB.getAll('categories'), ARDB.getAll('products'), ARDB.getAll('stockMovements'), ARDB.getAll('warehouses')
+            ]);
+            const catById = {}; categories.forEach(c => catById[c.id] = c);
+            const qty = {};
+            products.forEach(p => qty[p.id] = 0);
+            movements.forEach(m => { if (qty[m.productId] !== undefined) qty[m.productId] += (m.quantity || 0) * (m.direction === 'in' ? 1 : -1); });
+
+            let lowCount = 0, valueSum = 0;
+            const rows = products.map(p => {
+                const q = qty[p.id] || 0;
+                const low = q <= (p.minStock || 0);
+                const value = q * (p.cost || 0);
+                if (low) lowCount++;
+                valueSum += value;
+                return '<tr>' +
+                    '<td>' + p.name + '</td>' +
+                    '<td>' + (p.categoryId && catById[p.categoryId] ? catById[p.categoryId].name : '—') + '</td>' +
+                    '<td class="num" style="font-weight:700;">' + q + '</td>' +
+                    '<td class="num">' + (p.minStock || 0) + '</td>' +
+                    '<td class="num">' + UI.money(value) + '</td>' +
+                    '<td>' + (low
+                        ? '<span class="badge badge-red">منخفض</span>'
+                        : (q === 0 ? '<span class="badge badge-amber">نفد</span>' : '<span class="badge badge-green">متوفر</span>')) + '</td></tr>';
+            });
+
+            document.getElementById('stTotal').textContent = products.length;
+            document.getElementById('stLow').textContent = lowCount;
+            document.getElementById('stValue').innerHTML = UI.money(valueSum);
+            document.getElementById('stockBody').innerHTML = rows.join('') || '<tr><td colspan="6" class="empty-state">لا توجد منتجات</td></tr>';
+        }
+        load();
+    </script>
+</body>
+</html>

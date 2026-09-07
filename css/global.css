@@ -1,0 +1,876 @@
+/* ============================================================
+   AR_program — Minimal Professional Design System
+   Light & Dark themes · Indigo accent · SaaS-style clean UI
+   ============================================================ */
+
+/* ---------- Design Tokens ---------- */
+:root {
+    /* Dark theme (Neon Purple Analytics) */
+    --bg-dark: #0d0714;
+    --bg-gradient: linear-gradient(135deg, #090510 0%, #150924 40%, #1f0b31 100%);
+    --card-dark: rgba(28, 16, 44, 0.85);
+    --card-hover: rgba(42, 24, 66, 0.95);
+    --card-border: rgba(139, 92, 246, 0.28);
+    --card-hover-border: rgba(168, 85, 247, 0.65);
+    --text-primary: #f8fafc;
+    --text-secondary: #a0aec0;
+    --accent-cyan: #38bdf8;
+    --accent-blue: #00a2ff;
+    --accent-purple: #c084fc;
+    --accent-pink: #ec4899;
+    --accent-magenta: #e879f9;
+    --border-color: rgba(139, 92, 246, 0.22);
+    --header2-bg: #150824;
+    --btn-gradient: linear-gradient(135deg, #9333ea 0%, #6b21a8 100%);
+    --btn-purple: linear-gradient(135deg, #c084fc 0%, #9333ea 100%);
+    --success: #22c55e;
+    --danger: #ef4444;
+    --warning: #f97316;
+    --info: #38bdf8;
+    --bg-card: var(--card-dark);
+    --text-main: var(--text-primary);
+    --focus-ring: rgba(168, 85, 247, 0.35);
+    --glow: 0 0 16px rgba(168, 85, 247, 0.4);
+    --glow-strong: 0 0 28px rgba(168, 85, 247, 0.6);
+    --shadow-card: 0 4px 20px rgba(0, 0, 0, 0.4), 0 0 1px rgba(139, 92, 246, 0.3);
+}
+
+/* ---------- Base ---------- */
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    direction: rtl;
+    text-align: right;
+    transition: background 0.3s ease, color 0.3s ease;
+}
+
+body.dark-mode {
+    background: var(--bg-dark);
+    background-image: var(--bg-gradient);
+    background-attachment: fixed;
+    color: var(--text-primary);
+    min-height: 100vh;
+}
+
+body.light-mode {
+    --bg-dark: #ffffff;
+    --bg-gradient: linear-gradient(180deg, #f8fafc 0%, #eef2f7 100%);
+    --card-dark: #ffffff;
+    --card-hover: #f1f5f9;
+    --card-border: #e2e8f0;
+    --card-hover-border: #6366f1;
+    --text-primary: #0f172a;
+    --text-secondary: #64748b;
+    --accent-cyan: #4f46e5;
+    --accent-blue: #2563eb;
+    --accent-purple: #7c3aed;
+    --accent-pink: #e11d48;
+    --accent-magenta: #c026d3;
+    --border-color: #e2e8f0;
+    --header2-bg: #f1f5f9;
+    --btn-gradient: linear-gradient(135deg, #4f46e5 0%, #4338ca 100%);
+    --btn-purple: linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%);
+    --bg-card: var(--card-dark);
+    --text-main: var(--text-primary);
+    --focus-ring: rgba(79, 70, 229, 0.15);
+    --shadow-card: 0 1px 2px rgba(15, 23, 42, 0.04), 0 8px 24px rgba(15, 23, 42, 0.06);
+    background: #f1f5f9 !important;
+    background-image: linear-gradient(180deg, #f8fafc 0%, #eef2f7 100%) !important;
+    color: #0f172a !important;
+    min-height: 100vh;
+}
+
+/* ---------- Headers & Menus ---------- */
+.header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 24px;
+    background: var(--card-dark);
+    border-bottom: 1px solid var(--border-color);
+    box-shadow: 0 2px 12px rgba(2, 6, 23, 0.25);
+    gap: 14px;
+    flex-wrap: wrap;
+}
+
+.header h1 {
+    font-size: 1.4rem;
+    font-weight: 800;
+    color: var(--accent-cyan);
+    letter-spacing: 0.5px;
+    text-shadow: 0 0 18px rgba(129, 140, 248, 0.45);
+}
+
+.header2 {
+    background: var(--header2-bg);
+    border-bottom: 1px solid var(--border-color);
+    padding: 0 20px;
+}
+
+.main-menu {
+    display: flex;
+    list-style: none;
+    gap: 10px;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+.submenu-item {
+    position: relative;
+    padding: 8px 0;
+}
+
+.submenu-btn {
+    background: transparent;
+    border: 1px solid var(--border-color);
+    color: var(--text-primary);
+    padding: 8px 14px;
+    cursor: pointer;
+    font-size: 0.9rem;
+    font-weight: 500;
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    border-radius: 10px;
+    transition: all 0.2s ease;
+}
+
+.submenu-btn:hover, .submenu-btn.active {
+    background: rgba(129, 140, 248, 0.14);
+    border-color: rgba(129, 140, 248, 0.5);
+    color: var(--accent-cyan);
+    box-shadow: var(--glow);
+}
+
+.submenu-item > div, .submenu-content {
+    display: none;
+    position: absolute;
+    top: 100%;
+    right: 0;
+    background: var(--card-dark);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    min-width: 230px;
+    box-shadow: var(--shadow-card);
+    z-index: 100;
+    padding: 6px 0;
+}
+
+.submenu-item:hover > div, .submenu-item:hover > .submenu-content {
+    display: block;
+}
+
+.submenu-list {
+    list-style: none;
+}
+
+.submenu-list-item a {
+    display: block;
+    padding: 10px 16px;
+    color: var(--text-primary);
+    text-decoration: none;
+    font-size: 0.88rem;
+    transition: all 0.15s ease;
+    border-radius: 8px;
+    margin: 0 6px;
+}
+
+.submenu-list-item a:hover {
+    background: rgba(129, 140, 248, 0.12);
+    color: var(--accent-cyan);
+}
+
+body.light-mode .header {
+    background: #ffffff !important;
+    border-bottom-color: #e2e8f0 !important;
+    box-shadow: 0 1px 4px rgba(15, 23, 42, 0.06) !important;
+}
+
+body.light-mode .header2 {
+    background: #f1f5f9 !important;
+    border-bottom-color: #e2e8f0 !important;
+}
+
+/* ---------- Buttons ---------- */
+button {
+    font-family: inherit;
+    cursor: pointer;
+}
+
+.action-btn, .btn-primary, .confirm-btn, .checkout-btn {
+    background: var(--btn-gradient);
+    color: #fff;
+    border: none;
+    border-radius: 10px;
+    padding: 10px 20px;
+    font-weight: 600;
+    font-size: 0.92rem;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    box-shadow: 0 2px 10px rgba(79, 70, 229, 0.35), 0 0 22px rgba(129, 140, 248, 0.25);
+    transition: transform 0.15s ease, box-shadow 0.2s ease, opacity 0.2s ease;
+}
+
+.action-btn:hover, .btn-primary:hover, .confirm-btn:hover, .checkout-btn:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 5px 18px rgba(79, 70, 229, 0.5), 0 0 34px rgba(129, 140, 248, 0.45);
+}
+
+.btn-secondary, .cancel-btn, .reset-btn {
+    background: var(--card-hover);
+    color: var(--text-primary);
+    border: 1px solid var(--border-color);
+    border-radius: 10px;
+    padding: 8px 16px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.btn-secondary:hover, .cancel-btn:hover, .reset-btn:hover {
+    border-color: var(--accent-cyan);
+    color: var(--accent-cyan);
+    box-shadow: 0 0 14px rgba(129, 140, 248, 0.15);
+}
+
+.action-icon-btn {
+    background: transparent;
+    border: 1px solid transparent;
+    color: var(--accent-cyan);
+    cursor: pointer;
+    font-size: 1rem;
+    padding: 6px 9px;
+    border-radius: 8px;
+    transition: all 0.2s ease;
+}
+
+.action-icon-btn:hover {
+    background: rgba(129, 140, 248, 0.12);
+    border-color: rgba(129, 140, 248, 0.35);
+    transform: scale(1.08);
+}
+
+.tab-btn {
+    background: var(--card-dark);
+    border: 1px solid var(--border-color);
+    color: var(--text-secondary);
+    padding: 10px 18px;
+    border-radius: 10px;
+    cursor: pointer;
+    font-size: 0.9rem;
+    transition: all 0.2s ease;
+}
+
+.tab-btn:hover {
+    border-color: var(--accent-cyan);
+    color: var(--text-primary);
+}
+
+.tab-btn.active {
+    background: var(--accent-cyan);
+    color: #fff;
+    font-weight: 700;
+    border-color: transparent;
+    box-shadow: 0 2px 10px rgba(129, 140, 248, 0.35), 0 0 24px rgba(129, 140, 248, 0.4);
+}
+
+/* ---------- Cards ---------- */
+.table-card, .filter-card, .card, .form-card, .transfer-form-card,
+.customer-form-card, .tab-content-card, .glass-card, .pos-container,
+.invoices-container, .summary-strip, .offer-card, .modal-content {
+    background: var(--card-dark);
+    border: 1px solid var(--card-border);
+    border-radius: 14px;
+    box-shadow: var(--shadow-card);
+}
+
+body.light-mode .table-card, body.light-mode .filter-card, body.light-mode .card,
+body.light-mode .form-card, body.light-mode .transfer-form-card,
+body.light-mode .customer-form-card, body.light-mode .tab-content-card,
+body.light-mode .glass-card, body.light-mode .pos-container,
+body.light-mode .invoices-container, body.light-mode .summary-strip,
+body.light-mode .offer-card, body.light-mode .modal-content {
+    background: #ffffff !important;
+    border-color: #e2e8f0 !important;
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 8px 24px rgba(15, 23, 42, 0.06) !important;
+}
+
+/* ---------- Forms ---------- */
+.form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    flex: 1;
+    min-width: 200px;
+}
+
+.form-group label {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    font-weight: 500;
+}
+
+.form-input, .form-select,
+input[type="text"], input[type="number"], input[type="password"],
+input[type="search"], input[type="date"], input[type="email"], select, textarea {
+    background: var(--bg-dark);
+    border: 1px solid var(--border-color);
+    border-radius: 10px;
+    padding: 10px 14px;
+    color: var(--text-primary);
+    font-family: inherit;
+    font-size: 0.95rem;
+    outline: none;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.form-input:focus, .form-select:focus,
+input:focus, select:focus, textarea:focus {
+    border-color: var(--accent-cyan);
+    box-shadow: 0 0 0 3px var(--focus-ring);
+}
+
+body.light-mode .form-input, body.light-mode .form-select,
+body.light-mode input[type="text"], body.light-mode input[type="number"],
+body.light-mode input[type="password"], body.light-mode input[type="search"],
+body.light-mode input[type="date"], body.light-mode input[type="email"],
+body.light-mode select, body.light-mode textarea {
+    background-color: #ffffff !important;
+    color: #0f172a !important;
+    border-color: #e2e8f0 !important;
+}
+
+/* ---------- Search Box ---------- */
+.search-box {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: var(--bg-dark);
+    border: 1px solid var(--border-color);
+    padding: 4px 14px;
+    border-radius: 10px;
+    transition: border-color 0.2s ease;
+}
+
+.search-box:focus-within {
+    border-color: var(--accent-cyan);
+    box-shadow: 0 0 14px rgba(129, 140, 248, 0.25);
+}
+
+.search-box i {
+    color: var(--text-secondary);
+}
+
+.search-box input {
+    border: none;
+    background: transparent;
+    width: 100%;
+    padding: 8px 0;
+    color: var(--text-primary);
+    outline: none;
+    font-size: 0.95rem;
+}
+
+/* ---------- Tables ---------- */
+.table-card table, table {
+    width: 100%;
+    border-collapse: collapse;
+    text-align: right;
+}
+
+.table-card th, .table-card td, table th, table td {
+    padding: 13px 16px;
+    border-bottom: 1px solid var(--border-color);
+    font-size: 0.9rem;
+}
+
+.table-card th, table th {
+    background: linear-gradient(180deg, rgba(129, 140, 248, 0.16), rgba(129, 140, 248, 0.05));
+    color: var(--accent-cyan);
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.table-card td, table td {
+    color: var(--text-primary);
+}
+
+.table-card tbody tr:hover td, table tbody tr:hover td {
+    background: var(--card-hover);
+}
+
+body.light-mode .table-card th, body.light-mode table th {
+    background: #f1f5f9 !important;
+    color: var(--accent-cyan) !important;
+}
+
+body.light-mode .table-card td, body.light-mode table td {
+    color: #1e293b !important;
+    border-bottom-color: #f1f5f9 !important;
+}
+
+body.light-mode .table-card tbody tr:hover td, body.light-mode table tbody tr:hover td {
+    background: #f8fafc !important;
+}
+
+/* ---------- Modals ---------- */
+.modal, .modal-overlay {
+    position: fixed;
+    top: 0; left: 0; width: 100%; height: 100%;
+    background: rgba(2, 6, 23, 0.6);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+    backdrop-filter: blur(3px);
+}
+
+.modal-content {
+    width: 90%;
+    max-width: 620px;
+    padding: 24px;
+    color: var(--text-primary);
+    max-height: 85vh;
+    overflow-y: auto;
+}
+
+.modal-content input, .modal-content select, .modal-content textarea {
+    background: var(--bg-dark);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 8px 12px;
+    color: var(--text-primary);
+    outline: none;
+}
+
+.modal-actions {
+    display: flex;
+    gap: 10px;
+    margin-top: 12px;
+    justify-content: flex-end;
+}
+
+/* ---------- Badges ---------- */
+.offer-badge, .role-badge, .badge-in, .badge-out, .status-badge {
+    display: inline-block;
+    padding: 4px 10px;
+    border-radius: 20px;
+    font-size: 0.76rem;
+    font-weight: 700;
+}
+
+.badge-in {
+    background: rgba(34, 197, 94, 0.14);
+    color: #22c55e;
+    border: 1px solid rgba(34, 197, 94, 0.3);
+}
+
+.badge-out {
+    background: rgba(244, 63, 94, 0.14);
+    color: #f43f5e;
+    border: 1px solid rgba(244, 63, 94, 0.3);
+}
+
+/* ---------- Subtitle ---------- */
+.subtitle-desc {
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+    margin-bottom: 10px;
+}
+
+/* ---------- Scrollbar ---------- */
+::-webkit-scrollbar {
+    width: 9px;
+    height: 9px;
+}
+::-webkit-scrollbar-track {
+    background: var(--bg-dark);
+}
+::-webkit-scrollbar-thumb {
+    background: rgba(148, 163, 184, 0.35);
+    border-radius: 6px;
+    border: 2px solid transparent;
+    background-clip: padding-box;
+}
+::-webkit-scrollbar-thumb:hover {
+    background: rgba(148, 163, 184, 0.55);
+    background-clip: padding-box;
+}
+
+/* ---------- Dashboard Components ---------- */
+.dashboard-banner {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: var(--card-dark);
+    border: 1px solid var(--card-border);
+    border-radius: 14px;
+    padding: 18px 26px;
+    box-shadow: var(--shadow-card);
+    flex-wrap: wrap;
+    gap: 12px;
+    width: 100%;
+}
+
+.dashboard-banner h2 {
+    font-size: 1.35rem;
+    font-weight: 800;
+    color: var(--accent-cyan);
+    letter-spacing: 0.5px;
+    text-shadow: 0 0 16px rgba(129, 140, 248, 0.4);
+}
+
+.dashboard-filters {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+.filter-chip {
+    background: var(--card-hover);
+    border: 1px solid var(--border-color);
+    color: var(--text-secondary);
+    padding: 8px 16px;
+    border-radius: 10px;
+    cursor: pointer;
+    font-size: 0.88rem;
+    font-weight: 600;
+    transition: all 0.2s ease;
+}
+
+.filter-chip:hover, .filter-chip.active {
+    background: var(--accent-cyan);
+    border-color: transparent;
+    color: #fff;
+    box-shadow: 0 2px 10px rgba(129, 140, 248, 0.35), 0 0 22px rgba(129, 140, 248, 0.4);
+}
+
+.kpi-card {
+    background: var(--card-dark);
+    border: 1px solid var(--card-border);
+    border-radius: 14px;
+    padding: 20px 22px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    box-shadow: var(--shadow-card);
+    transition: transform 0.2s ease, border-color 0.2s ease;
+    position: relative;
+    overflow: hidden;
+    width: 100%;
+}
+
+.kpi-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    right: 0;
+    width: 4px;
+    height: 100%;
+    background: var(--accent-cyan);
+    border-radius: 0 14px 14px 0;
+    box-shadow: 0 0 14px var(--accent-cyan);
+}
+
+.kpi-card.kpi-profit::before { background: var(--accent-magenta); }
+.kpi-card.kpi-quantity::before { background: var(--accent-purple); }
+.kpi-card.kpi-aov::before { background: var(--accent-blue); }
+
+.kpi-card:hover {
+    transform: translateY(-3px);
+    border-color: var(--card-hover-border);
+    box-shadow: var(--shadow-card), 0 0 26px rgba(129, 140, 248, 0.2);
+}
+
+.kpi-value {
+    font-size: 1.9rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    line-height: 1.2;
+    letter-spacing: 0.5px;
+}
+
+.kpi-label {
+    font-size: 0.84rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+    margin-top: 8px;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+}
+
+.chart-card {
+    background: var(--card-dark);
+    border: 1px solid var(--card-border);
+    border-radius: 14px;
+    padding: 20px;
+    box-shadow: var(--shadow-card);
+    display: flex;
+    flex-direction: column;
+    height: 400px;
+    width: 100%;
+    transition: border-color 0.2s ease;
+}
+
+.chart-card:hover {
+    border-color: var(--card-hover-border);
+    box-shadow: var(--shadow-card), 0 0 26px rgba(129, 140, 248, 0.18);
+}
+
+.chart-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 14px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.chart-header h3 {
+    font-size: 1rem;
+    font-weight: 700;
+    color: var(--accent-cyan);
+    text-shadow: 0 0 14px rgba(129, 140, 248, 0.35);
+}
+
+.chart-body {
+    flex: 1;
+    position: relative;
+    width: 100%;
+    height: 100%;
+}
+
+/* ---------- POS (Point of Sale) ---------- */
+.products-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: 12px;
+    overflow-y: auto;
+}
+
+.product-card-pos {
+    background: var(--card-dark);
+    border: 1px solid var(--border-color);
+    border-radius: 10px;
+    padding: 12px;
+    text-align: center;
+    cursor: pointer;
+    color: var(--text-primary);
+    transition: all 0.2s ease;
+}
+
+.product-card-pos:hover {
+    border-color: var(--accent-cyan);
+    background: var(--card-hover);
+    transform: translateY(-2px);
+}
+
+.cart-section {
+    background: var(--card-dark);
+    border: 1px solid var(--border-color);
+    border-radius: 14px;
+    display: flex;
+    flex-direction: column;
+    padding: 20px;
+}
+
+.cart-item-row {
+    display: flex;
+    justify-content: space-between;
+    background: var(--bg-dark);
+    padding: 8px 12px;
+    border-radius: 8px;
+    font-size: 0.85rem;
+}
+
+.cart-summary {
+    border-top: 1px solid var(--border-color);
+    padding-top: 15px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.summary-row {
+    display: flex;
+    justify-content: space-between;
+    font-size: 1.1rem;
+}
+
+/* ---------- Glass surfaces ---------- */
+.glass-card {
+    background: rgba(148, 163, 184, 0.06);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    border: 1px solid var(--border-color);
+    box-shadow: var(--shadow-card);
+}
+
+.glass-table {
+    width: 100%;
+    border-collapse: collapse;
+    text-align: right;
+}
+
+.glass-table th, .glass-table td {
+    padding: 12px 15px;
+    border-bottom: 1px solid var(--border-color);
+    font-size: 0.88rem;
+    color: var(--text-primary);
+}
+
+.glass-table th {
+    background: rgba(129, 140, 248, 0.14);
+    color: var(--accent-cyan);
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.glass-table tbody tr:hover {
+    background: rgba(129, 140, 248, 0.08);
+}
+
+/* ---------- Light Mode: neutralise glow effects ---------- */
+body.light-mode .header h1,
+body.light-mode .dashboard-banner h2,
+body.light-mode .chart-header h3 {
+    text-shadow: none;
+}
+
+body.light-mode .action-btn, body.light-mode .btn-primary,
+body.light-mode .confirm-btn, body.light-mode .checkout-btn {
+    box-shadow: 0 2px 8px rgba(79, 70, 229, 0.16);
+}
+
+body.light-mode .action-btn:hover, body.light-mode .btn-primary:hover,
+body.light-mode .confirm-btn:hover, body.light-mode .checkout-btn:hover {
+    box-shadow: 0 4px 12px rgba(79, 70, 229, 0.22);
+}
+
+body.light-mode .tab-btn.active, body.light-mode .filter-chip:hover,
+body.light-mode .filter-chip.active {
+    box-shadow: 0 2px 8px rgba(79, 70, 229, 0.2);
+}
+
+body.light-mode .kpi-card::before {
+    box-shadow: none;
+}
+
+body.light-mode .kpi-card:hover, body.light-mode .chart-card:hover {
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 8px 24px rgba(15, 23, 42, 0.08);
+}
+
+body.light-mode .search-box:focus-within,
+body.light-mode .submenu-btn:hover, body.light-mode .submenu-btn.active,
+body.light-mode .btn-secondary:hover, body.light-mode .cancel-btn:hover,
+body.light-mode .reset-btn:hover {
+    box-shadow: none;
+}
+
+body.light-mode .table-card th, body.light-mode table th {
+    background: #f1f5f9 !important;
+}
+
+/* ---------- Multi payment methods UI (light & dark) ---------- */
+.pay-rows-box {
+    margin: 10px 0;
+    border-top: 1px dashed var(--border-color);
+    padding-top: 8px;
+}
+
+.pay-rows-box > label {
+    font-size: 0.85rem;
+    display: block;
+    margin-bottom: 5px;
+    color: var(--text-secondary);
+}
+
+.pay-row {
+    display: flex;
+    gap: 6px;
+    margin-bottom: 6px;
+    align-items: center;
+}
+
+.pay-row select,
+.pay-row input[type="number"] {
+    background: var(--bg-dark);
+    color: var(--text-primary);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    padding: 6px;
+    font-size: 0.85rem;
+    font-family: inherit;
+    outline: none;
+    transition: border-color 0.25s, box-shadow 0.25s;
+}
+
+.pay-row select {
+    flex: 1;
+}
+
+.pay-row input[type="number"] {
+    width: 90px;
+}
+
+.pay-row select:focus,
+.pay-row input[type="number"]:focus {
+    border-color: var(--accent-cyan);
+    box-shadow: 0 0 0 3px var(--focus-ring);
+}
+
+.pay-add-btn {
+    background: var(--btn-gradient);
+    color: #fff;
+    border: none;
+    padding: 6px 13px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 0.78rem;
+    font-weight: 700;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 6px;
+    box-shadow: var(--glow);
+    transition: opacity 0.2s, transform 0.1s, box-shadow 0.2s;
+}
+
+.pay-add-btn:hover {
+    opacity: 0.92;
+    transform: translateY(-1px);
+    box-shadow: var(--glow-strong);
+}
+
+.pay-remove-btn {
+    background: var(--accent-pink);
+    border: none;
+    color: #fff;
+    padding: 5px 9px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 0.75rem;
+    transition: opacity 0.2s;
+}
+
+.pay-remove-btn:hover {
+    opacity: 0.85;
+}
+
+body.light-mode .pay-add-btn {
+    box-shadow: 0 2px 8px rgba(79, 70, 229, 0.18);
+}
+
+body.light-mode .pay-add-btn:hover {
+    box-shadow: 0 4px 12px rgba(79, 70, 229, 0.25);
+}

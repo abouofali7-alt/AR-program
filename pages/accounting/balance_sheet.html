@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>الميزانية العمومية — AR-Program</title>
+    <link rel="stylesheet" href="../../css/global.css">
+    <link rel="stylesheet" href="../../css/app.css">
+    <link rel="stylesheet" href="../../css/responsive.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
+</head>
+<body class="dark-mode">
+    <div id="appHeaderHost"></div>
+    <main class="pagewrap" style="padding:22px;max-width:1000px;margin:0 auto;">
+        <div class="page-head">
+            <div>
+                <h2>الميزانية العمومية</h2>
+                <div class="sub">المركز المالي: الأصول والخصوم وحقوق الملكية</div>
+            </div>
+        </div>
+        <div class="table-card">
+            <div class="table-head">الميزانية العمومية</div>
+            <div class="table-scroll">
+                <table class="data-table">
+                    <thead><tr><th>البند</th><th>قيمة</th><th>الإجمالي</th></tr></thead>
+                    <tbody id="bsBody"></tbody>
+                </table>
+            </div>
+        </div>
+    </main>
+
+    <script src="../../js/ui.js"></script>
+    <script src="../../js/db.js"></script>
+    <script src="../../js/app.js"></script>
+    <script>
+        async function load() {
+            const [accounts, entries] = await Promise.all([ARDB.getAll('accounts'), ARDB.getAll('journalEntries')]);
+            const totals = {};
+            entries.forEach(en => (en.lines || []).forEach(l => {
+                if (!totals[l.accountId]) totals[l.accountId] = 0;
+                totals[l.accountId] += (l.debit || 0) - (l.credit || 0);
+            }));
+
+            const assets = accounts.filter(a => a.parentId && (a.type === 'asset'));
+            const liabilities = accounts.filter(a => a.parentId && (a.type === 'liability'));
+            const equities = accounts.filter(a => a.parentId && (a.type === 'equity'));
+
+            const assetSum = assets.reduce((s, a) => s + Math.abs(totals[a.id] || 0), 0);
+            const liabilitySum = liabilities.reduce((s, a) => s + Math.abs(totals[a.id] || 0), 0);
+            const equitySum = equities.reduce((s, a) => s + Math.abs(totals[a.id] || 0), 0);
+
+            const row = (a) => '<tr><td style="padding-right:30px;">' + a.name + '</td><td class="num">' + UI.money(Math.abs(totals[a.id] || 0)) + '</td><td></td></tr>';
+
+            const body = document.getElementById('bsBody');
+            body.innerHTML =
+                '<tr style="background:var(--card-hover);"><td colspan="3" style="font-weight:800;color:var(--accent-cyan);"><i class="fa-solid fa-building-columns"></i> الأصول</td></tr>' +
+                assets.map(row).join('') +
+                '<tr><td style="font-weight:700;">إجمالي الأصول</td><td class="num">' + UI.money(assetSum) + '</td><td class="num" style="font-weight:800;">' + UI.money(assetSum) + '</td></tr>' +
+                '<tr style="background:var(--card-hover);"><td colspan="3" style="font-weight:800;color:var(--accent-purple);"><i class="fa-solid fa-scale-balanced"></i> الخصوم</td></tr>' +
+                liabilities.map(row).join('') +
+                '<tr><td style="font-weight:700;">إجمالي الخصوم</td><td class="num">' + UI.money(liabilitySum) + '</td><td class="num" style="font-weight:800;">' + UI.money(liabilitySum) + '</td></tr>' +
+                '<tr style="background:var(--card-hover);"><td colspan="3" style="font-weight:800;color:var(--success);"><i class="fa-solid fa-gem"></i> حقوق الملكية</td></tr>' +
+                equities.map(row).join('') +
+                '<tr><td style="font-weight:700;">إجمالي حقوق الملكية</td><td class="num">' + UI.money(equitySum) + '</td><td class="num" style="font-weight:800;">' + UI.money(equitySum) + '</td></tr>' +
+                '<tr style="font-weight:800;font-size:1.02rem;background:var(--card-hover);">' +
+                '<td>الخصوم + حقوق الملكية</td><td></td><td class="num">' + UI.money(liabilitySum + equitySum) + '</td></tr>';
+        }
+        load();
+    </script>
+</body>
+</html>

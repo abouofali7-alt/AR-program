@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>التدفقات النقدية — AR-Program</title>
+    <link rel="stylesheet" href="../../css/global.css">
+    <link rel="stylesheet" href="../../css/app.css">
+    <link rel="stylesheet" href="../../css/responsive.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
+</head>
+<body class="dark-mode">
+    <div id="appHeaderHost"></div>
+    <main class="pagewrap" style="padding:22px;max-width:1000px;margin:0 auto;">
+        <div class="page-head">
+            <div>
+                <h2>التدفقات النقدية</h2>
+                <div class="sub">الداخلة والخارجة</div>
+            </div>
+            <div class="page-actions">
+                <button class="btn btn-primary-soft" onclick="openFlowModal()"><i class="fa-solid fa-plus"></i> حركة نقدية</button>
+            </div>
+        </div>
+        <div class="stat-grid">
+            <div class="stat-card"><div class="label">التدفق الداخل</div><div class="value green" id="sumIn">0</div></div>
+            <div class="stat-card"><div class="label">التدفق الخارج</div><div class="value red" id="sumOut">0</div></div>
+            <div class="stat-card"><div class="label">صافي التدفق</div><div class="value cyan" id="sumNet">0</div></div>
+        </div>
+        <div class="table-card">
+            <div class="table-head">الحركات</div>
+            <div class="table-scroll">
+                <table class="data-table">
+                    <thead><tr><th>التاريخ</th><th>النوع</th><th>البيان</th><th>المبلغ</th><th></th></tr></thead>
+                    <tbody id="flowBody"></tbody>
+                </table>
+            </div>
+        </div>
+    </main>
+
+    <div id="flowModal" class="modal-mask" style="visibility:hidden;opacity:0;">
+        <div class="modal-box">
+            <h3>حركة نقدية</h3>
+            <div class="form-grid">
+                <div class="form-item"><label>التاريخ</label><input type="date" id="flowDate"></div>
+                <div class="form-item"><label>النوع</label>
+                    <select id="flowType"><option value="in">داخل (مقبوضات)</option><option value="out">خارج (مدفوعات)</option></select>
+                </div>
+                <div class="form-item"><label>المبلغ</label><input type="number" id="flowAmount" step="0.01" min="0"></div>
+                <div class="form-item" style="grid-column:1/-1;"><label>البيان</label><input id="flowDesc"></div>
+            </div>
+            <div style="display:flex;gap:10px;justify-content:flex-end;">
+                <button class="btn btn-secondary" onclick="closeFlowModal()">إلغاء</button>
+                <button class="btn btn-primary-soft" onclick="saveFlow()">حفظ</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="../../js/ui.js"></script>
+    <script src="../../js/db.js"></script>
+    <script src="../../js/app.js"></script>
+    <script>
+        async function load() {
+            // مصدر البيانات: قيود اليومية الماسة بحساب الخزينة (id=3) + الحركات اليدوية
+            const journal = await ARDB.getAll('journalEntries');
+            const manual = (await ARDB.getAll('expenses')).filter(e => e.type === 'in' || e.type === 'out');
+            const rows = [];
+
+            journal.forEach(j => {
+                let cin = 0, cout = 0;
+                (j.lines || []).forEach(l => {
+                    if (l.accountId === 3) { cin += (l.debit || 0); cout += (l.credit || 0); }
+                });
+                if (cin > 0) rows.push({ date: j.date, type: 'in', amount: cin, desc: (j.desc || '') });
+                if (cout > 0) rows.push({ date: j.date, type: 'out', amount: cout, desc: (j.desc || '') });
+            });
+            manual.forEach(m => rows.push({ date: m.date, type: m.type, amount: m.amount || 0, desc: (m.desc || m.note || ''), id: m.id, manual: true }));
+
+            rows.sort((a, b) => (b.date || 0) - (a.date || 0));
+            let sumIn = 0, sumOut = 0;
+            rows.forEach(r => { if (r.type === 'in') sumIn += r.amount; else sumOut += r.amount; });
+
+            document.getElementById('flowBody').innerHTML = rows.map(f =>
+                '<tr>' +
+                '<td>' + UI.date(f.date) + '</td>' +
+                '<td>' + (f.type === 'in'
+                    ? '<span class="badge badge-green">داخل</span>'
+                    : '<span class="badge badge-red">خارج</span>') + '</td>' +
+                '<td>' + (f.desc || '—') + '</td>' +
+                '<td class="num" style="color:' + (f.type === 'in' ? 'var(--success)' : 'var(--danger)') + ';">' + UI.money(f.amount || 0) + '</td>' +
+                '<td style="text-align:left;">' + (f.manual
+                    ? '<button class="btn btn-sm btn-danger" onclick="delFlow(' + f.id + ')"><i class="fa-solid fa-trash"></i></button>'
+                    : '<span style="color:var(--text-secondary);font-size:0.8rem;">تلقائي من القيود</span>') + '</td>' +
+                '</tr>'
+            ).join('') || '<tr><td colspan="5" class="empty-state">لا توجد حركات</td></tr>';
+
+            document.getElementById('sumIn').innerHTML = UI.money(sumIn);
+            document.getElementById('sumOut').innerHTML = UI.money(sumOut);
+            document.getElementById('sumNet').innerHTML = UI.money(sumIn - sumOut);
+            document.getElementById('sumNet').dataset.raw = sumIn - sumOut;
+        }
+        function openFlowModal() {
+            document.getElementById('flowDate').value = UI.todayInput();
+            document.getElementById('flowType').value = 'in';
+            document.getElementById('flowAmount').value = '';
+            document.getElementById('flowDesc').value = '';
+            document.getElementById('flowModal').style.visibility = 'visible';
+            document.getElementById('flowModal').style.opacity = '1';
+        }
+        function closeFlowModal() {
+            document.getElementById('flowModal').style.visibility = 'hidden';
+            document.getElementById('flowModal').style.opacity = '0';
+        }
+        async function saveFlow() {
+            const date = new Date(document.getElementById('flowDate').value + 'T12:00:00').getTime();
+            const type = document.getElementById('flowType').value;
+            const amount = Number(document.getElementById('flowAmount').value) || 0;
+            const desc = document.getElementById('flowDesc').value.trim();
+            if (amount <= 0) { UI.toast('أدخل مبلغًا صحيحًا', 'warn'); return; }
+            await ARDB.add('expenses', { date, type, amount, desc, kind: 'cashflow' });
+            UI.toast('تم الحفظ', 'ok');
+            closeFlowModal();
+            load();
+        }
+        async function delFlow(id) {
+            const ok = await UI.confirmBox('حذف الحركة؟');
+            if (!ok) return;
+            await ARDB.remove('expenses', id);
+            UI.toast('تم الحذف', 'ok');
+            load();
+        }
+        load();
+    </script>
+</body>
+</html>

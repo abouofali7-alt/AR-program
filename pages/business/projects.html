@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>المشاريع — AR-Program</title>
+    <link rel="stylesheet" href="../../css/global.css">
+    <link rel="stylesheet" href="../../css/app.css">
+    <link rel="stylesheet" href="../../css/responsive.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
+</head>
+<body class="dark-mode">
+    <div id="appHeaderHost"></div>
+    <main class="pagewrap" style="padding:22px;max-width:1200px;margin:0 auto;">
+        <div class="page-head">
+            <div>
+                <h2>المشاريع</h2>
+                <div class="sub">إدارة المشاريع والأنشطة</div>
+            </div>
+            <div class="page-actions">
+                <button class="btn btn-primary-soft" onclick="openProjModal()"><i class="fa-solid fa-plus"></i> مشروع جديد</button>
+            </div>
+        </div>
+        <div class="stat-grid">
+            <div class="stat-card"><div class="label">إجمالي المشاريع</div><div class="value cyan" id="projTotal">0</div></div>
+            <div class="stat-card"><div class="label">جارية</div><div class="value purple" id="projActive">0</div></div>
+            <div class="stat-card"><div class="label">مكتملة</div><div class="value green" id="projDone">0</div></div>
+        </div>
+        <div class="module-grid">
+            <div id="projCards"></div>
+        </div>
+    </main>
+
+    <div id="projModal" class="modal-mask" style="visibility:hidden;opacity:0;">
+        <div class="modal-box">
+            <h3>مشروع جديد</h3>
+            <div class="form-grid">
+                <div class="form-item" style="grid-column:1/-1;"><label>اسم المشروع</label><input id="prName"></div>
+                <div class="form-item" style="grid-column:1/-1;"><label>الوصف</label><textarea id="prDesc"></textarea></div>
+                <div class="form-item"><label>جهة/عميل</label><input id="prClient"></div>
+                <div class="form-item"><label>الحالة</label>
+                    <select id="prStatus"><option value="planned">مخطط</option><option value="active">جاري</option><option value="done">مكتمل</option><option value="hold">معلق</option></select>
+                </div>
+                <div class="form-item"><label>تاريخ البدء</label><input type="date" id="prStart"></div>
+                <div class="form-item"><label>تاريخ التسليم</label><input type="date" id="prEnd"></div>
+                <div class="form-item"><label>الميزانية</label><input type="number" id="prBudget" step="0.01" min="0"></div>
+            </div>
+            <div style="display:flex;gap:10px;justify-content:flex-end;">
+                <button class="btn btn-secondary" onclick="closeProjModal()">إلغاء</button>
+                <button class="btn btn-primary-soft" onclick="saveProj()">حفظ</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="../../js/ui.js"></script>
+    <script src="../../js/db.js"></script>
+    <script src="../../js/app.js"></script>
+    <script>
+        const statusInfo = {
+            planned: ['badge-blue', 'مخطط'],
+            active: ['badge-green', 'جاري'],
+            done: ['badge-purple', 'مكتمل'],
+            hold: ['badge-amber', 'معلق']
+        };
+
+        async function load() {
+            const projects = await ARDB.getAll('projects');
+            const active = projects.filter(p => p.status === 'active').length;
+            const done = projects.filter(p => p.status === 'done').length;
+            document.getElementById('projTotal').textContent = projects.length;
+            document.getElementById('projActive').textContent = active;
+            document.getElementById('projDone').textContent = done;
+
+            document.getElementById('projCards').innerHTML = projects.map(p => {
+                const si = statusInfo[p.status] || statusInfo.planned;
+                return '<div class="stat-card" style="text-align:right;">' +
+                    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">' +
+                    '<b>' + p.name + '</b><span class="badge ' + si[0] + '">' + si[1] + '</span></div>' +
+                    '<p style="font-size:0.85rem;color:var(--text-secondary);margin-bottom:10px;">' + (p.client || '') + '</p>' +
+                    '<div style="font-size:0.8rem;color:var(--text-secondary);display:flex;gap:14px;flex-wrap:wrap;">' +
+                    (p.start ? '<span><i class="fa-solid fa-calendar"></i> بداية: ' + p.start + '</span>' : '') +
+                    (p.budget > 0 ? '<span><i class="fa-solid fa-coins"></i> ' + UI.money(p.budget) + '</span>' : '') +
+                    '</div>' +
+                    '<div style="margin-top:12px;text-align:left;">' +
+                    '<button class="btn btn-sm" onclick="editProj(' + p.id + ')"><i class="fa-solid fa-pen"></i></button> ' +
+                    '<button class="btn btn-sm btn-danger" onclick="delProj(' + p.id + ')"><i class="fa-solid fa-trash"></i></button>' +
+                    '</div></div>';
+            }).join('') || '<div class="empty-state">لا توجد مشاريع</div>';
+        }
+        let editingPrid = null;
+        function openProjModal() {
+            editingPrid = null;
+            ['prName','prDesc','prClient','prStart','prEnd','prBudget'].forEach(i => document.getElementById(i).value = '');
+            document.getElementById('prStatus').value = 'planned';
+            document.getElementById('projModal').style.visibility = 'visible';
+            document.getElementById('projModal').style.opacity = '1';
+        }
+        function closeProjModal() {
+            document.getElementById('projModal').style.visibility = 'hidden';
+            document.getElementById('projModal').style.opacity = '0';
+        }
+        async function editProj(id) {
+            const p = await ARDB.getById('projects', id);
+            if (!p) return;
+            editingPrid = id;
+            document.getElementById('prName').value = p.name || '';
+            document.getElementById('prDesc').value = p.description || '';
+            document.getElementById('prClient').value = p.client || '';
+            document.getElementById('prStatus').value = p.status || 'planned';
+            document.getElementById('prStart').value = p.start || '';
+            document.getElementById('prEnd').value = p.end || '';
+            document.getElementById('prBudget').value = p.budget || '';
+            document.getElementById('projModal').style.visibility = 'visible';
+            document.getElementById('projModal').style.opacity = '1';
+        }
+        async function saveProj() {
+            const name = document.getElementById('prName').value.trim();
+            if (!name) { UI.toast('اسم المشروع مطلوب', 'warn'); return; }
+            const rec = {
+                name,
+                description: document.getElementById('prDesc').value.trim(),
+                client: document.getElementById('prClient').value.trim(),
+                status: document.getElementById('prStatus').value,
+                start: document.getElementById('prStart').value,
+                end: document.getElementById('prEnd').value,
+                budget: Number(document.getElementById('prBudget').value) || 0,
+                createdAt: Date.now()
+            };
+            if (editingPrid) { rec.id = editingPrid; await ARDB.put('projects', rec); UI.toast('تم التعديل', 'ok'); }
+            else { await ARDB.add('projects', rec); UI.toast('تمت الإضافة', 'ok'); }
+            closeProjModal(); load();
+        }
+        async function delProj(id) {
+            const ok = await UI.confirmBox('حذف المشروع؟');
+            if (!ok) return;
+            await ARDB.remove('projects', id);
+            UI.toast('تم الحذف', 'ok'); load();
+        }
+        load();
+    </script>
+</body>
+</html>

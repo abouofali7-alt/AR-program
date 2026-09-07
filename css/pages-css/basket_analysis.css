@@ -1,0 +1,54 @@
+.analysis-container {
+    padding: 30px;
+}
+
+.analysis-container h2 {
+    color: var(--accent-cyan);
+    margin-bottom: 5px;
+    font-size: 1.4rem;
+}
+
+.subtitle-desc {
+    color: var(--text-secondary);
+    margin-bottom: 25px;
+    font-size: 0.9rem;
+}
+
+.table-card {
+    background-color: var(--card-dark);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3);
+}
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+    text-align: right;
+}
+
+th, td {
+    padding: 14px 20px;
+    border-bottom: 1px solid var(--border-color);
+    font-size: 0.9rem;
+}
+
+th {
+    background-color: var(--header2-bg);
+    color: var(--accent-cyan);
+    font-weight: 600;
+}
+
+tr:hover {
+    background-color: var(--card-hover);
+}
+
+.offer-badge {
+    background: linear-gradient(135deg, var(--accent-cyan), var(--accent-pink));
+    color: #fff;
+    padding: 4px 10px;
+    border-radius: 20px;
+    font-size: 0.75rem;
+    font-weight: bold;
+}

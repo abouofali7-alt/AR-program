@@ -1,0 +1,308 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+    <script>
+        try {
+            var l = localStorage.getItem('ar_lang') || 'ar';
+            document.documentElement.lang = l;
+            document.documentElement.dir = (l === 'en') ? 'ltr' : 'rtl';
+        } catch(e) {}
+    </script>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>نقطة البيع (POS) الكاشير — AR-Program</title>
+    <link rel="stylesheet" href="../../css/global.css">
+    <link rel="stylesheet" href="../../css/app.css">
+    <link rel="stylesheet" href="../../css/responsive.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
+    <style>
+        .pos-grid { display: grid; grid-template-columns: 1fr 380px; gap: 18px; height: calc(100vh - 110px); }
+        .pos-products { display: flex; flex-direction: column; gap: 14px; overflow: hidden; }
+        .pos-cart { background: var(--card-dark); border: 1px solid var(--border-color); border-radius: 14px; padding: 18px; display: flex; flex-direction: column; box-shadow: var(--shadow-card); }
+        .prod-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(145px, 1fr)); gap: 12px; overflow-y: auto; padding-inline-end: 4px; flex: 1; }
+        .prod-item { background: var(--card-dark); border: 1px solid var(--border-color); border-radius: 10px; padding: 12px; cursor: pointer; transition: transform 0.2s, border-color 0.2s; text-align: center; }
+        .prod-item:hover { transform: translateY(-2px); border-color: var(--accent-cyan); }
+        .cart-items { flex: 1; overflow-y: auto; margin: 14px 0; border-top: 1px solid var(--border-color); border-bottom: 1px solid var(--border-color); padding: 8px 0; }
+        .cart-row { display: flex; align-items: center; justify-content: space-between; padding: 8px 0; border-bottom: 1px dashed rgba(255,255,255,0.06); }
+        @media (max-width: 900px) {
+            .pos-grid { grid-template-columns: 1fr; height: auto; }
+        }
+    </style>
+</head>
+<body class="dark-mode">
+    <div id="appHeaderHost"></div>
+
+    <main class="pagewrap" style="padding:16px 22px;max-width:1400px;margin:0 auto;">
+        <div class="page-head" style="margin-bottom:12px;">
+            <div>
+                <h2><i class="fa-solid fa-cash-register" style="color:var(--success);"></i> نقطة البيع (POS)</h2>
+                <div class="sub">نظام الكاشير والمبيعات السريعة</div>
+            </div>
+            <div style="display:flex;gap:10px;">
+                <input id="barcodeSearch" placeholder="🔍 ابحث بالاسم أو الباركوود..." style="padding:8px 14px;border-radius:8px;border:1px solid var(--border-color);background:var(--card-dark);color:var(--text-primary);width:260px;" autofocus>
+            </div>
+        </div>
+
+        <div class="pos-grid">
+            <!-- قائمة المنتجات والتصنيفات -->
+            <div class="pos-products">
+                <div id="categoryTabs" style="display:flex;gap:8px;overflow-x:auto;padding-bottom:6px;">
+                    <button class="btn btn-secondary active" onclick="filterCategory(null)" style="padding:6px 14px;font-size:0.85rem;">الكل</button>
+                </div>
+                <div class="prod-cards" id="productsGrid"></div>
+            </div>
+
+            <!-- سلة المبيعات والحساب -->
+            <div class="pos-cart">
+                <div style="display:flex;align-items:center;justify-content:space-between;font-weight:700;">
+                    <span><i class="fa-solid fa-cart-shopping" style="color:var(--accent-cyan);"></i> الفاتورة الحالية</span>
+                    <button class="btn btn-secondary" onclick="clearCart()" style="padding:4px 8px;font-size:0.75rem;color:var(--danger);"><i class="fa-solid fa-trash-can"></i> تفريغ</button>
+                </div>
+
+                <div style="margin:10px 0;">
+                    <label style="font-size:0.8rem;color:var(--text-secondary);display:block;margin-bottom:4px;">العميل:</label>
+                    <select id="posCustomer" style="width:100%;padding:8px;border-radius:8px;border:1px solid var(--border-color);background:var(--card-dark);color:var(--text-primary);"></select>
+                </div>
+
+                <div class="cart-items" id="cartItems">
+                    <div style="text-align:center;padding:40px 0;color:var(--text-secondary);font-size:0.9rem;">السلة فارغة، انقر على المنتجات لإضافتها</div>
+                </div>
+
+                <div style="display:flex;flex-direction:column;gap:8px;font-size:0.95rem;">
+                    <div style="display:flex;justify-content:space-between;">
+                        <span>المجموع:</span>
+                        <b id="subTotal">0.00 ج.م</b>
+                    </div>
+                    <div style="display:flex;justify-content:space-between;color:var(--success);font-size:1.2rem;font-weight:700;margin-top:6px;border-top:1px solid var(--border-color);padding-top:8px;">
+                        <span>الإجمالي المستحق:</span>
+                        <span id="grandTotal">0.00 ج.م</span>
+                    </div>
+                    <button class="btn btn-primary-soft" onclick="checkout()" style="width:100%;padding:12px;font-size:1.05rem;margin-top:10px;"><i class="fa-solid fa-print"></i> إتمام الدفع وطباعة الفاتورة</button>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script src="../../js/ui.js"></script>
+    <script src="../../js/db.js"></script>
+    <script src="../../js/api.js"></script>
+    <script src="../../js/export.js"></script>
+    <script src="../../js/app.js"></script>
+    <script>
+        let _allProducts = [];
+        let _categories = [];
+        let _customers = [];
+        let _cart = [];
+        let _selectedCat = null;
+
+        async function initPOS() {
+            _allProducts = await ARDB.getAll('products');
+            _categories = await ARDB.getAll('categories');
+            _customers = await ARDB.getAll('customers');
+            
+            const custSel = document.getElementById('posCustomer');
+            if (custSel) {
+                custSel.innerHTML = '<option value="">— عميل عام —</option>' + _customers.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+            }
+
+            renderCategories();
+            renderProducts();
+            renderProducts();
+
+            document.getElementById('barcodeSearch').addEventListener('input', (e) => {
+                const q = e.target.value.trim().toLowerCase();
+                renderProducts(q);
+            });
+        }
+
+        function renderCategories() {
+            const tabs = document.getElementById('categoryTabs');
+            let html = `<button class="btn btn-secondary ${!_selectedCat ? 'active' : ''}" onclick="filterCategory(null)" style="padding:6px 14px;font-size:0.85rem;">الكل</button>`;
+            _categories.forEach(c => {
+                html += `<button class="btn btn-secondary ${_selectedCat === c.id ? 'active' : ''}" onclick="filterCategory(${c.id})" style="padding:6px 14px;font-size:0.85rem;">${c.name}</button>`;
+            });
+            tabs.innerHTML = html;
+        }
+
+        function filterCategory(catId) {
+            _selectedCat = catId;
+            renderCategories();
+            renderProducts();
+        }
+
+        function renderProducts(query = '') {
+            const grid = document.getElementById('productsGrid');
+            let filtered = _allProducts;
+            if (_selectedCat) filtered = filtered.filter(p => p.categoryId === _selectedCat);
+            if (query) {
+                filtered = filtered.filter(p => (p.name && p.name.toLowerCase().includes(query)) || (p.barcode && p.barcode.includes(query)));
+            }
+
+            if (!filtered.length) {
+                grid.innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:40px;color:var(--text-secondary);">لا توجد منتجات مطابقة</div>';
+                return;
+            }
+
+            grid.innerHTML = filtered.map(p => `
+                <div class="prod-item" onclick="addToCart(${p.id})">
+                    <div style="font-size:1.5rem;margin-bottom:6px;color:var(--accent-cyan);"><i class="fa-solid fa-box"></i></div>
+                    <div style="font-weight:600;font-size:0.85rem;margin-bottom:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${p.name}</div>
+                    <div style="color:var(--success);font-weight:700;font-size:0.9rem;">${UI.money(p.price || 0)}</div>
+                </div>
+            `).join('');
+        }
+
+        function addToCart(prodId) {
+            const prod = _allProducts.find(p => p.id === prodId);
+            if (!prod) return;
+            const existing = _cart.find(c => c.id === prodId);
+            if (existing) {
+                existing.qty += 1;
+            } else {
+                _cart.push({ id: prod.id, name: prod.name, price: prod.price || 0, qty: 1 });
+            }
+            renderCart();
+        }
+
+        function updateQty(prodId, delta) {
+            const item = _cart.find(c => c.id === prodId);
+            if (!item) return;
+            item.qty += delta;
+            if (item.qty <= 0) {
+                _cart = _cart.filter(c => c.id !== prodId);
+            }
+            renderCart();
+        }
+
+        function clearCart() {
+            _cart = [];
+            renderCart();
+        }
+
+        function renderCart() {
+            const container = document.getElementById('cartItems');
+            if (!_cart.length) {
+                container.innerHTML = '<div style="text-align:center;padding:40px 0;color:var(--text-secondary);font-size:0.9rem;">السلة فارغة، انقر على المنتجات لإضافتها</div>';
+                document.getElementById('subTotal').textContent = '0.00 ج.م';
+                document.getElementById('grandTotal').textContent = '0.00 ج.م';
+                return;
+            }
+
+            let total = 0;
+            container.innerHTML = _cart.map(item => {
+                const itemTotal = item.price * item.qty;
+                total += itemTotal;
+                return `
+                    <div class="cart-row">
+                        <div style="flex:1;">
+                            <div style="font-weight:600;font-size:0.85rem;">${item.name}</div>
+                            <div style="font-size:0.75rem;color:var(--text-secondary);">${UI.money(item.price)} × ${item.qty}</div>
+                        </div>
+                        <div style="display:flex;align-items:center;gap:6px;">
+                            <button onclick="updateQty(${item.id}, -1)" class="icon-btn" style="width:22px;height:22px;">-</button>
+                            <span style="font-size:0.85rem;font-weight:700;">${item.qty}</span>
+                            <button onclick="updateQty(${item.id}, 1)" class="icon-btn" style="width:22px;height:22px;">+</button>
+                            <b style="min-width:65px;text-align:left;font-size:0.85rem;">${UI.money(itemTotal)}</b>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+
+            document.getElementById('subTotal').textContent = UI.money(total) + ' ج.م';
+            document.getElementById('grandTotal').textContent = UI.money(total) + ' ج.م';
+        }
+
+        async function checkout() {
+            if (!_cart.length) return UI.toast('السلة فارغة!', 'warn');
+            const total = _cart.reduce((s, c) => s + (c.price * c.qty), 0);
+
+            if (typeof ARPayments !== 'undefined') {
+                ARPayments.openCheckoutModal(total, async (payRes) => {
+                    if (payRes.status === 'success') {
+                        await finalizeInvoice(total, payRes.method);
+                    }
+                });
+            } else {
+                await finalizeInvoice(total, 'cash');
+            }
+        }
+
+        async function finalizeInvoice(total, payMethod) {
+            const invNumber = await ARDB.nextSeq('invoice_seq', 'POS-', 5);
+            const customerId = document.getElementById('posCustomer') && document.getElementById('posCustomer').value ? Number(document.getElementById('posCustomer').value) : null;
+            const invoice = {
+                number: invNumber,
+                date: Date.now(),
+                customerId: customerId,
+                total: total,
+                items: _cart,
+                paymentMethod: payMethod || 'cash',
+                paymentType: payMethod === 'credit' ? 'credit' : 'cash',
+                type: 'pos'
+            };
+            await ARDB.add('invoices', invoice);
+            
+            // خصم المخزون حركياً لكل منتج مباع في الكاشير
+            for (const item of _cart) {
+                await ARDB.add('stockMovements', {
+                    date: Date.now(),
+                    productId: item.id,
+                    direction: 'out',
+                    type: 'pos',
+                    quantity: item.qty || 1,
+                    note: 'بيع كاشير POS ' + invNumber
+                });
+            }
+
+            // قيد يومية محاسبي تلقائي لمبيعات الكاشير
+            const debitAcc = payMethod === 'credit' ? 4 : 3; // 4: العملاء/مدينون, 3: الصندوق
+            if (total > 0) {
+                await ARDB.add('journalEntries', {
+                    number: await ARDB.nextSeq('journalAuto', 'JRN-', 6),
+                    date: Date.now(),
+                    desc: 'مبيعات كاشير POS ' + invNumber,
+                    lines: [
+                        { accountId: debitAcc, debit: total, credit: 0 },
+                        { accountId: 11, debit: 0, credit: total }  // المبيعات
+                    ]
+                });
+            }
+
+            if (typeof ARAudit !== 'undefined') {
+                ARAudit.logAction('إصدار فاتورة POS', 'المبيعات', `فاتورة رقم ${invNumber} بقيمة ${total} عبر ${payMethod}`);
+            }
+
+            UI.toast('تم حفظ وإتمام الفاتورة رقم: ' + invNumber, 'ok');
+
+            // طباعة إيصال السريع
+            const win = window.open('', '', 'width=400,height=600');
+            if (win) {
+                win.document.write(`
+                    <html lang="ar" dir="rtl">
+                    <head><title>إيصال ${invNumber}</title></head>
+                    <body style="font-family:sans-serif;padding:15px;text-align:center;font-size:12px;">
+                        <h3>إيصال مبيعات — AR-Program</h3>
+                        <p>رقم الفاتورة: ${invNumber}</p>
+                        <p>طريقة الدفع: ${payMethod}</p>
+                        <p>التاريخ: ${new Date().toLocaleString('ar-EG')}</p>
+                        <hr>
+                        <table style="width:100%;text-align:right;font-size:11px;">
+                            ${_cart.map(c => `<tr><td>${c.name} (x${c.qty})</td><td style="text-align:left;">${c.price * c.qty}</td></tr>`).join('')}
+                        </table>
+                        <hr>
+                        <h3 style="margin-top:10px;">الإجمالي: ${total} ج.م</h3>
+                        <p>شكراً لزيارتكم!</p>
+                        <script>window.onload = function() { window.print(); window.close(); }<\/script>
+                    </body>
+                    </html>
+                `);
+                win.document.close();
+            }
+
+            clearCart();
+        }
+
+        initPOS();
+    </script>
+</body>
+</html>

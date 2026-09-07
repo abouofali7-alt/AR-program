@@ -1,0 +1,268 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>فواتير البيع — AR-Program</title>
+    <link rel="stylesheet" href="../../css/global.css">
+    <link rel="stylesheet" href="../../css/app.css">
+    <link rel="stylesheet" href="../../css/responsive.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
+</head>
+<body class="dark-mode">
+    <div id="appHeaderHost"></div>
+    <main class="pagewrap" style="padding:22px;max-width:1200px;margin:0 auto;">
+        <div class="page-head">
+            <div>
+                <h2>فواتير البيع</h2>
+                <div class="sub">تسجيل المبيعات مع خصم تلقائي للمخزون</div>
+            </div>
+            <div class="page-actions">
+                <button class="btn btn-primary-soft" onclick="openInvModal()"><i class="fa-solid fa-plus"></i> فاتورة بيع</button>
+            </div>
+        </div>
+        <div class="table-card">
+            <div class="table-head">فواتير البيع</div>
+            <div class="table-scroll">
+                <table class="data-table">
+                    <thead><tr><th>الرقم</th><th>التاريخ</th><th>العميل</th><th>عدد الأصناف</th><th>طريقة الدفع</th><th>الإجمالي</th><th></th></tr></thead>
+                    <tbody id="invBody"></tbody>
+                </table>
+            </div>
+        </div>
+    </main>
+
+    <div id="invModal" class="modal-mask" style="visibility:hidden;opacity:0;">
+        <div class="modal-box" style="width:min(820px,94vw);">
+            <h3>فاتورة بيع جديدة</h3>
+            <div class="form-grid">
+                <div class="form-item"><label>التاريخ</label><input type="date" id="invDate"></div>
+                <div class="form-item"><label>العميل</label><select id="invCustomer"></select></div>
+                <div class="form-item"><label>طريقة الدفع</label>
+                    <select id="invPayType">
+                        <option value="cash">نقداً (كاش)</option>
+                        <option value="credit">آجل (على الحساب)</option>
+                    </select>
+                </div>
+                <div class="form-item"><label>ملاحظة</label><input id="invNote"></div>
+            </div>
+            <div style="margin-bottom:10px;"><button class="btn btn-sm" onclick="addInvLine()"><i class="fa-solid fa-plus"></i> إضافة صنف</button></div>
+            <div class="table-scroll" style="margin-bottom:12px;">
+                <table class="data-table">
+                    <thead><tr><th>المنتج</th><th>الكمية</th><th>سعر البيع</th><th>الإجمالي</th><th></th></tr></thead>
+                    <tbody id="invLinesBody"></tbody>
+                </table>
+            </div>
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+                <span>الإجمالي: <b id="invTotal">0.00</b></span>
+            </div>
+            <div style="display:flex;gap:10px;justify-content:flex-end;">
+                <button class="btn btn-secondary" onclick="closeInvModal()">إلغاء</button>
+                <button class="btn btn-primary-soft" onclick="saveInvoice()">حفظ الفاتورة</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="../../js/ui.js"></script>
+    <script src="../../js/db.js"></script>
+    <script src="../../js/app.js"></script>
+    <script>
+        let invLineCount = 0;
+
+        async function load() {
+            const [customers, invoices, products] = await Promise.all([ARDB.getAll('customers'), ARDB.getAll('invoices'), ARDB.getAll('products')]);
+            const custById = {}; customers.forEach(c => custById[c.id] = c);
+            const sel = document.getElementById('invCustomer');
+            sel.innerHTML = '<option value="">— بدون عميل —' + '</option>' + customers.map(c => '<option value="' + c.id + '">' + c.name + '</option>').join('');
+
+            const sorted = invoices.sort((a, b) => (b.date || 0) - (a.date || 0));
+            document.getElementById('invBody').innerHTML = sorted.map(inv => {
+                const isCredit = inv.paymentType === 'credit';
+                return '<tr><td class="num" style="font-weight:700;">' + inv.number + '</td>' +
+                '<td>' + UI.date(inv.date) + '</td>' +
+                '<td>' + (inv.customerId && custById[inv.customerId] ? custById[inv.customerId].name : '—') + '</td>' +
+                '<td class="num">' + inv.items.length + '</td>' +
+                '<td><span class="badge ' + (isCredit ? 'badge-amber' : 'badge-green') + '">' + (isCredit ? 'آجل' : 'نقداً') + '</span></td>' +
+                '<td class="num" style="font-weight:700;color:var(--success);">' + UI.money(inv.total) + '</td>' +
+                '<td style="text-align:left;white-space:nowrap;">' +
+                '<button class="btn btn-sm" onclick="printInvoice(' + inv.id + ')"><i class="fa-solid fa-print"></i></button> ' +
+                '<button class="btn btn-sm btn-danger" onclick="delInvoice(' + inv.id + ')"><i class="fa-solid fa-trash"></i></button></td></tr>';
+            }).join('') || '<tr><td colspan="7" class="empty-state">لا توجد فواتير</td></tr>';
+        }
+
+        async function addInvLine() {
+            const i = invLineCount++;
+            const products = await ARDB.getAll('products');
+            const tr = document.createElement('tr');
+            tr.innerHTML =
+                '<td><select id="ilProd_' + i + '" class="il-prod" style="width:100%;padding:8px;border-radius:8px;border:1px solid var(--border-color);background:var(--card-hover);color:var(--text-primary);">' +
+                '<option value="">— اختر —</option>' +
+                products.map(p => '<option value="' + p.id + '" data-price="' + (p.price || 0) + '">' + p.name + '</option>').join('') + '</select></td>' +
+                '<td><input id="ilQty_' + i + '" type="number" step="1" min="0" value="1" style="width:70px;padding:8px;border-radius:8px;border:1px solid var(--border-color);background:var(--card-hover);color:var(--text-primary);" oninput="recalcInv()"></td>' +
+                '<td><input id="ilPrice_' + i + '" type="number" step="0.01" min="0" style="width:90px;padding:8px;border-radius:8px;border:1px solid var(--border-color);background:var(--card-hover);color:var(--text-primary);" oninput="recalcInv()"></td>' +
+                '<td class="num" id="ilSub_' + i + '" style="font-weight:700;">0.00</td>' +
+                '<td><button class="btn btn-sm btn-danger" onclick="this.closest(\'tr\').remove();recalcInv();"><i class="fa-solid fa-xmark"></i></button></td>';
+            document.getElementById('invLinesBody').appendChild(tr);
+        }
+
+        async function recalcInv() {
+            let total = 0;
+            document.querySelectorAll('#invLinesBody tr').forEach(tr => {
+                const sel = tr.querySelector('select[id^="ilProd_"]');
+                const qty = tr.querySelector('input[id^="ilQty_"]');
+                const price = tr.querySelector('input[id^="ilPrice_"]');
+                if (sel && price && qty) {
+                    const oc = sel.options[sel.selectedIndex];
+                    if (oc && oc.dataset.price && !price.value) price.value = oc.dataset.price;
+                    const sub = (Number(qty.value) || 0) * (Number(price.value) || 0);
+                    total += sub;
+                    const subEl = tr.querySelector('[id^="ilSub_"]');
+                    if (subEl) subEl.textContent = Number(sub).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                }
+            });
+            document.getElementById('invTotal').textContent = total.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        }
+
+        async function openInvModal() {
+            document.getElementById('invModal').style.visibility = 'visible';
+            document.getElementById('invModal').style.opacity = '1';
+            document.getElementById('invDate').value = UI.todayInput();
+            document.getElementById('invNote').value = '';
+            document.getElementById('invPayType').value = 'cash';
+            document.getElementById('invLinesBody').innerHTML = '';
+            invLineCount = 0;
+            recalcInv();
+            await load();
+        }
+        function closeInvModal() {
+            document.getElementById('invModal').style.visibility = 'hidden';
+            document.getElementById('invModal').style.opacity = '0';
+        }
+
+        async function saveInvoice() {
+            const date = new Date(document.getElementById('invDate').value + 'T12:00:00').getTime();
+            const customerId = document.getElementById('invCustomer').value ? Number(document.getElementById('invCustomer').value) : null;
+            const paymentType = document.getElementById('invPayType').value || 'cash';
+            const note = document.getElementById('invNote').value.trim();
+
+            const items = [];
+            let total = 0;
+            const qtyCheck = {};
+            document.querySelectorAll('#invLinesBody tr').forEach(tr => {
+                const sel = tr.querySelector('select[id^="ilProd_"]');
+                const qty = tr.querySelector('input[id^="ilQty_"]');
+                const price = tr.querySelector('input[id^="ilPrice_"]');
+                if (sel) {
+                    const pid = Number(sel.value);
+                    if (pid) {
+                        const q = Number(qty.value) || 0;
+                        const p = Number(price.value) || 0;
+                        if (q > 0) {
+                            items.push({ productId: pid, quantity: q, price: p, total: q * p });
+                            total += q * p;
+                            qtyCheck[pid] = (qtyCheck[pid] || 0) + q;
+                        }
+                    }
+                }
+            });
+            if (!items.length) { UI.toast('أضف على الأقل صنفًا واحدًا', 'warn'); return; }
+
+            // التحقق من توفر المخزون
+            const movements = await ARDB.getAll('stockMovements');
+            for (const pid of Object.keys(qtyCheck)) {
+                let available = 0;
+                movements.forEach(m => { if (m.productId === Number(pid)) available += (m.quantity || 0) * (m.direction === 'in' ? 1 : -1); });
+                if (available < qtyCheck[pid]) {
+                    const p = await ARDB.getById('products', Number(pid));
+                    UI.toast('الكمية غير كافية لـ ' + (p ? p.name : 'المنتج') + ' (المتاح: ' + available + ')', 'error');
+                    return;
+                }
+            }
+
+            const number = await ARDB.nextSeq('invoice', 'INV-', 6);
+            await ARDB.add('invoices', { number, date, customerId, paymentType, items, total, note, createdAt: Date.now() });
+
+            for (const it of items) {
+                await ARDB.add('stockMovements', { date, productId: it.productId, direction: 'out', type: 'sale', quantity: it.quantity, note: 'فاتورة ' + number });
+            }
+
+            // تسجيل الإيراد في دفتر اليومية
+            const incomeAccount = 11; // مبيعات
+            const debitAccount = paymentType === 'credit' ? 4 : 3; // 4: مدينون/عملاء, 3: صندوق النقدية
+            if (total > 0) {
+                await ARDB.add('journalEntries', {
+                    number: await ARDB.nextSeq('journalAuto', 'JRN-', 6),
+                    date, desc: 'فواتير بيع ' + number + (paymentType === 'credit' ? ' (آجل)' : ' (نقداً)'),
+                    lines: [
+                        { accountId: debitAccount, debit: total, credit: 0 },
+                        { accountId: incomeAccount, debit: 0, credit: total }
+                    ]
+                });
+            }
+
+            UI.toast('تم حفظ الفاتورة ' + number, 'ok');
+            closeInvModal();
+            load();
+        }
+
+        async function printInvoice(id) {
+            const inv = await ARDB.getById('invoices', id);
+            if (!inv) return;
+            const [settings, products, customers] = await Promise.all([ARDB.getAll('settings'), ARDB.getAll('products'), ARDB.getAll('customers')]);
+            const s = {}; settings.forEach(r => { if (r && r.key) s[r.key] = r.value; });
+            const pById = {}; products.forEach(p => pById[p.id] = p);
+            const cust = inv.customerId ? customers.find(c => c.id === inv.customerId) : null;
+
+            const rows = inv.items.map(it =>
+                '<tr><td>' + (pById[it.productId] ? pById[it.productId].name : 'صنف ' + it.productId) + '</td>' +
+                '<td>' + it.quantity + '</td>' +
+                '<td>' + UI.money(it.price) + '</td>' +
+                '<td>' + UI.money(it.total) + '</td></tr>'
+            ).join('');
+
+            const win = window.open('', '_blank', 'width=800,height=640');
+            if (!win) { UI.toast('اسمح بالنوافذ المنبثقة للطباعة', 'warn'); return; }
+            win.document.write(
+                '<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><title>' + (inv.number) + '</title>' +
+                '<style>' +
+                'body{font-family:"Segoe UI",Tahoma,Arial;direction:rtl;color:#111;margin:24px;}' +
+                '.head{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:2px solid #444;padding-bottom:12px;margin-bottom:18px;}' +
+                '.head h1{margin:0;font-size:20px;}' +
+                '.meta{width:100%;border-collapse:collapse;margin-bottom:16px;} .meta td{padding:3px 0;font-size:13px;}' +
+                'table.items{width:100%;border-collapse:collapse;margin-bottom:16px;font-size:13px;}' +
+                'table.items th{background:#f0f0f0;padding:7px;border:1px solid #bbb;text-align:center;}' +
+                'table.items td{padding:6px;border:1px solid #ddd;text-align:center;}' +
+                '.total{text-align:left;font-size:16px;font-weight:700;margin-top:8px;}' +
+                '.foot{margin-top:30px;font-size:12px;color:#555;border-top:1px solid #ccc;padding-top:10px;}' +
+                '@media print{body{margin:8mm;}}' +
+                '</style></head><body>' +
+                '<div class="head"><div><h1>' + (s.companyName || 'AR-Program') + '</h1>' +
+                '<div style="font-size:12px;color:#555;">' + (s.companyAddress || '') + (s.companyPhone ? ' — هاتف: ' + s.companyPhone : '') + '</div>' +
+                (s.taxNo ? '<div style="font-size:12px;color:#555;">الرقم الضريبي: ' + s.taxNo + '</div>' : '') +
+                '</div><div style="text-align:left;"><b style="font-size:18px;">فاتورة بيع</b><br><span style="font-size:13px;">' + inv.number + '</span></div></div>' +
+                '<table class="meta"><tr><td><b>التاريخ:</b> ' + UI.datetime(inv.date) + '</td>' +
+                (cust ? '<td><b>العميل:</b> ' + cust.name + '</td>' : '<td></td>') +
+                '</tr></table>' +
+                '<table class="items"><thead><tr><th>الصنف</th><th>الكمية</th><th>سعر الوحدة</th><th>الإجمالي</th></tr></thead><tbody>' + rows + '</tbody></table>' +
+                '<div class="total">الإجمالي: ' + UI.money(inv.total) + ' ' + (s.currency || '') + '</div>' +
+                (inv.note ? '<div style="font-size:12px;color:#333;margin-top:8px;">ملاحظات: ' + inv.note + '</div>' : '') +
+                (s.invoiceNote ? '<div class="foot">' + s.invoiceNote + '</div>' : '') +
+                '</body></html>'
+            );
+            win.document.close();
+            win.focus();
+            setTimeout(() => { win.print(); }, 350);
+        }
+
+        async function delInvoice(id) {
+            const ok = await UI.confirmBox('حذف الفاتورة؟ لن تُلغى حركات المخزون المرتبطة تلقائيًا.');
+            if (!ok) return;
+            await ARDB.remove('invoices', id);
+            UI.toast('تم الحذف', 'ok');
+            load();
+        }
+
+        load();
+    </script>
+</body>
+</html>

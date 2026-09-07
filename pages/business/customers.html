@@ -1,0 +1,183 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>العملاء — AR-Program</title>
+    <link rel="stylesheet" href="../../css/global.css">
+    <link rel="stylesheet" href="../../css/app.css">
+    <link rel="stylesheet" href="../../css/responsive.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
+</head>
+<body class="dark-mode">
+    <div id="appHeaderHost"></div>
+    <main class="pagewrap" style="padding:22px;max-width:1100px;margin:0 auto;">
+        <div class="page-head">
+            <div>
+                <h2>العملاء</h2>
+                <div class="sub">إدارة سجل العملاء والأرصدة والمديونيات</div>
+            </div>
+            <div class="page-actions" style="display:flex;gap:8px;">
+                <button class="btn btn-secondary" onclick="ARExport.tableToCSV('custTable', 'العملاء')"><i class="fa-solid fa-file-excel"></i> تصدير Excel</button>
+                <button class="btn btn-secondary" onclick="ARExport.printTable('custTable', 'جدول العملاء')"><i class="fa-solid fa-print"></i> طباعة</button>
+                <button class="btn btn-primary-soft" onclick="openCustModal()"><i class="fa-solid fa-plus"></i> إضافة عميل</button>
+            </div>
+        </div>
+        <div class="stat-grid">
+            <div class="stat-card"><div class="label">إجمالي العملاء</div><div class="value cyan" id="custTotal">0</div></div>
+            <div class="stat-card"><div class="label">إجمالي المديونية الحالية</div><div class="value red" id="custBalance">0</div></div>
+        </div>
+        <div class="table-card">
+            <div class="table-head">العملاء</div>
+            <div class="table-scroll">
+                <table class="data-table" id="custTable">
+                    <thead><tr><th>الاسم</th><th>الهاتف</th><th>العنوان</th><th>الرصيد الافتتاحي</th><th>الرصيد الحالي</th><th></th></tr></thead>
+                    <tbody id="custBody"></tbody>
+                </table>
+            </div>
+        </div>
+    </main>
+
+    <div id="custModal" class="modal-mask" style="visibility:hidden;opacity:0;">
+        <div class="modal-box">
+            <h3 id="custModalTitle">إضافة عميل</h3>
+            <div class="form-grid">
+                <div class="form-item"><label>الاسم *</label><input id="cuName"></div>
+                <div class="form-item"><label>الهاتف</label><input id="cuPhone"></div>
+                <div class="form-item"><label>الرصيد الافتتاحي (مدين / عليك)</label><input type="number" id="cuOpeningBalance" placeholder="0.00" step="0.01"></div>
+                <div class="form-item" style="grid-column:1/-1;">
+                    <label>العنوان وتحديد الموقع</label>
+                    <div style="display:flex;gap:8px;">
+                        <input id="cuAddress" placeholder="العنوان النصي..." style="flex:1;">
+                        <button class="btn btn-secondary" type="button" onclick="pickMapLocation()"><i class="fa-solid fa-map-location-dot" style="color:var(--accent-cyan);"></i> اختيار من الخريطة GPS</button>
+                    </div>
+                </div>
+                <div class="form-item" style="grid-column:1/-1;"><label>الإحداثيات الجغرافية (Lat, Lng)</label><input id="cuCoords" readonly placeholder="لم يتم تحديد موقع بعد"></div>
+                <div class="form-item" style="grid-column:1/-1;"><label>ملاحظات</label><input id="cuNote"></div>
+            </div>
+            <div style="display:flex;gap:10px;justify-content:flex-end;">
+                <button class="btn btn-secondary" onclick="closeCustModal()">إلغاء</button>
+                <button class="btn btn-primary-soft" onclick="saveCust()">حفظ</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="../../js/ui.js"></script>
+    <script src="../../js/db.js"></script>
+    <script src="../../js/export.js"></script>
+    <script src="../../js/app.js"></script>
+    <script>
+        let editingCuid = null;
+        async function load() {
+            const [customers, invoices, payments, returns] = await Promise.all([
+                ARDB.getAll('customers'),
+                ARDB.getAll('invoices'),
+                ARDB.getAll('payments'),
+                ARDB.getAll('invoiceReturns')
+            ]);
+
+            const invoiceSum = {};
+            invoices.forEach(inv => {
+                if (inv.customerId) invoiceSum[inv.customerId] = (invoiceSum[inv.customerId] || 0) + (inv.total || 0);
+            });
+
+            const returnSum = {};
+            (returns || []).forEach(r => {
+                if (r.customerId) returnSum[r.customerId] = (returnSum[r.customerId] || 0) + (r.total || 0);
+            });
+
+            const paymentSum = {};
+            payments.forEach(p => {
+                if ((p.type === 'receipt' || p.partyType === 'customer') && p.partyId) {
+                    paymentSum[p.partyId] = (paymentSum[p.partyId] || 0) + (p.amount || 0);
+                }
+            });
+
+            let grandTotalDebt = 0;
+            document.getElementById('custTotal').textContent = customers.length;
+
+            document.getElementById('custBody').innerHTML = customers.map(c => {
+                const openBal = Number(c.openingBalance || 0);
+                const invBal = Number(invoiceSum[c.id] || 0);
+                const retBal = Number(returnSum[c.id] || 0);
+                const payBal = Number(paymentSum[c.id] || 0);
+                const currentBal = openBal + invBal - retBal - payBal;
+                grandTotalDebt += currentBal;
+
+                return '<tr><td><b>' + c.name + '</b></td>' +
+                '<td class="num">' + (c.phone || '—') + '</td>' +
+                '<td>' + (c.address || '—') + '</td>' +
+                '<td class="num">' + UI.money(openBal) + '</td>' +
+                '<td class="num" style="font-weight:700;color:' + (currentBal > 0 ? 'var(--danger)' : 'var(--text-primary)') + ';">' + UI.money(currentBal) + '</td>' +
+                '<td style="text-align:left;white-space:nowrap;">' +
+                '<button class="btn btn-sm" onclick="editCust(' + c.id + ')"><i class="fa-solid fa-pen"></i></button> ' +
+                '<button class="btn btn-sm btn-danger" onclick="delCust(' + c.id + ')"><i class="fa-solid fa-trash"></i></button></td></tr>';
+            }).join('') || '<tr><td colspan="6" class="empty-state">لا يوجد عملاء</td></tr>';
+
+            document.getElementById('custBalance').innerHTML = UI.money(grandTotalDebt);
+        }
+
+        function pickMapLocation() {
+            const addrVal = document.getElementById('cuAddress').value.trim();
+            const coordsVal = document.getElementById('cuCoords').value.trim();
+            const query = addrVal || coordsVal;
+
+            if (typeof ARLocation !== 'undefined') {
+                ARLocation.openMapModal(query, (res) => {
+                    document.getElementById('cuCoords').value = `${res.lat}, ${res.lng}`;
+                    if (res.address && !document.getElementById('cuAddress').value.trim()) {
+                        document.getElementById('cuAddress').value = res.address;
+                    }
+                    UI.toast('تم تحديد موقع العميل على الخريطة بنجاح', 'ok');
+                });
+            }
+        }
+
+        function openCustModal() {
+            editingCuid = null;
+            document.getElementById('custModalTitle').textContent = 'إضافة عميل';
+            ['cuName','cuPhone','cuAddress','cuCoords','cuOpeningBalance','cuNote'].forEach(i => { if (document.getElementById(i)) document.getElementById(i).value = ''; });
+            document.getElementById('custModal').style.visibility = 'visible';
+            document.getElementById('custModal').style.opacity = '1';
+        }
+        function closeCustModal() {
+            document.getElementById('custModal').style.visibility = 'hidden';
+            document.getElementById('custModal').style.opacity = '0';
+        }
+        async function editCust(id) {
+            const c = await ARDB.getById('customers', id);
+            if (!c) return;
+            editingCuid = id;
+            document.getElementById('custModalTitle').textContent = 'تعديل عميل';
+            document.getElementById('cuName').value = c.name || '';
+            document.getElementById('cuPhone').value = c.phone || '';
+            document.getElementById('cuAddress').value = c.address || '';
+            document.getElementById('cuOpeningBalance').value = c.openingBalance || 0;
+            document.getElementById('cuNote').value = c.note || '';
+            document.getElementById('custModal').style.visibility = 'visible';
+            document.getElementById('custModal').style.opacity = '1';
+        }
+        async function saveCust() {
+            const name = document.getElementById('cuName').value.trim();
+            if (!name) { UI.toast('الاسم مطلوب', 'warn'); return; }
+            const rec = {
+                name,
+                phone: document.getElementById('cuPhone').value.trim(),
+                address: document.getElementById('cuAddress').value.trim(),
+                openingBalance: Number(document.getElementById('cuOpeningBalance').value) || 0,
+                note: document.getElementById('cuNote').value.trim()
+            };
+            if (editingCuid) { rec.id = editingCuid; await ARDB.put('customers', rec); UI.toast('تم التعديل', 'ok'); }
+            else { await ARDB.add('customers', rec); UI.toast('تمت الإضافة', 'ok'); }
+            closeCustModal(); load();
+        }
+        async function delCust(id) {
+            const ok = await UI.confirmBox('حذف العميل؟');
+            if (!ok) return;
+            await ARDB.remove('customers', id);
+            UI.toast('تم الحذف', 'ok'); load();
+        }
+        load();
+    </script>
+</body>
+</html>

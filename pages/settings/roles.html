@@ -1,0 +1,149 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>الصلاحيات — AR-Program</title>
+    <link rel="stylesheet" href="../../css/global.css">
+    <link rel="stylesheet" href="../../css/app.css">
+    <link rel="stylesheet" href="../../css/responsive.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
+</head>
+<body class="dark-mode">
+    <div id="appHeaderHost"></div>
+    <main class="pagewrap" style="padding:22px;max-width:1200px;margin:0 auto;">
+        <div class="page-head">
+            <div>
+                <h2>الصلاحيات والأدوار</h2>
+                <div class="sub">إدارة الأدوار والوحدات المسموح بها لكل دور</div>
+            </div>
+            <div class="page-actions">
+                <button class="btn btn-primary-soft" onclick="openRoleModal()"><i class="fa-solid fa-plus"></i> دور جديد</button>
+            </div>
+        </div>
+        <div id="roleGrid" class="module-grid"></div>
+    </main>
+
+    <div id="roleModal" class="modal-mask" style="visibility:hidden;opacity:0;">
+        <div class="modal-box">
+            <h3 id="roleModalTitle">دور جديد</h3>
+            <div class="form-grid">
+                <div class="form-item" style="grid-column:1/-1;"><label>اسم الدور</label><input id="rName"></div>
+                <div class="form-item" style="grid-column:1/-1;"><label>الوصف</label><input id="rDesc"></div>
+                <div class="form-item" style="grid-column:1/-1;">
+                    <label>الوحدات المسموحة</label>
+                    <div id="rPerms" style="display:flex;flex-wrap:wrap;gap:10px;"></div>
+                </div>
+            </div>
+            <div style="display:flex;gap:10px;justify-content:flex-end;">
+                <button class="btn btn-secondary" onclick="closeRoleModal()">إلغاء</button>
+                <button class="btn btn-primary-soft" onclick="saveRole()">حفظ</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="../../js/ui.js"></script>
+    <script src="../../js/db.js"></script>
+    <script src="../../js/app.js"></script>
+    <script>
+        const MODULES = [
+            { key: 'accounting', label: 'المحاسبة', icon: 'fa-calculator' },
+            { key: 'inventory', label: 'المخزون', icon: 'fa-box' },
+            { key: 'hr', label: 'الموارد البشرية', icon: 'fa-user-group' },
+            { key: 'business', label: 'إدارة الأعمال', icon: 'fa-briefcase' },
+            { key: 'settings', label: 'الإعدادات', icon: 'fa-gear' }
+        ];
+        let editingRid = null;
+
+        function permsOf(r) {
+            if (Array.isArray(r.permissions)) return r.permissions;
+            if (r.name === 'مدير') return MODULES.map(m => m.key);
+            return [];
+        }
+
+        async function load() {
+            const roles = await ARDB.getAll('roles');
+            document.getElementById('roleGrid').innerHTML = roles.map(r => {
+                const perms = permsOf(r);
+                const all = perms.length === MODULES.length;
+                return '<div class="stat-card">' +
+                    '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px;">' +
+                    '<div><b>' + r.name + '</b><div style="font-size:0.8rem;color:var(--text-secondary);margin-top:4px;">' + (r.description || '') + '</div></div>' +
+                    '<span class="badge ' + (all ? 'badge-green' : 'badge-blue') + '">' + (all ? 'كل الوحدات' : perms.length + ' وحدات') + '</span>' +
+                    '</div>' +
+                    '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px;">' +
+                    MODULES.map(m => {
+                        const has = perms.includes(m.key);
+                        return '<span class="badge ' + (has ? 'badge-green' : 'badge-red') + '">' + (has ? '<i class="fa-solid fa-check"></i> ' : '<i class="fa-solid fa-xmark"></i> ') + m.label + '</span>';
+                    }).join('') +
+                    '</div>' +
+                    '<div style="text-align:left;">' +
+                    '<button class="btn btn-sm" onclick="editRole(' + r.id + ')"><i class="fa-solid fa-pen"></i> تعديل</button> ' +
+                    (r.name !== 'مدير' ? '<button class="btn btn-sm btn-danger" onclick="delRole(' + r.id + ')"><i class="fa-solid fa-trash"></i></button>' : '') +
+                    '</div></div>';
+            }).join('') || '<div class="empty-state">لا توجد أدوار</div>';
+        }
+
+        function openRoleModal() {
+            editingRid = null;
+            document.getElementById('roleModalTitle').textContent = 'دور جديد';
+            document.getElementById('rName').value = '';
+            document.getElementById('rDesc').value = '';
+            renderPerms(MODULES.map(m => m.key));
+            document.getElementById('roleModal').style.visibility = 'visible';
+            document.getElementById('roleModal').style.opacity = '1';
+        }
+        function closeRoleModal() {
+            document.getElementById('roleModal').style.visibility = 'hidden';
+            document.getElementById('roleModal').style.opacity = '0';
+        }
+        function renderPerms(checked) {
+            document.getElementById('rPerms').innerHTML = MODULES.map(m => {
+                const on = checked.includes(m.key);
+                return '<label class="perm-chip" style="cursor:pointer;display:flex;align-items:center;gap:6px;padding:8px 12px;border:1px solid var(--border-color);border-radius:9px;background:var(--card-hover);">' +
+                    '<input type="checkbox" value="' + m.key + '" ' + (on ? 'checked' : '') + ' style="width:16px;height:16px;accent-color:var(--success);"> ' + m.label + '</label>';
+            }).join('');
+        }
+        async function editRole(id) {
+            const r = await ARDB.getById('roles', id);
+            if (!r) return;
+            editingRid = id;
+            document.getElementById('roleModalTitle').textContent = 'تعديل: ' + r.name;
+            document.getElementById('rName').value = r.name;
+            document.getElementById('rDesc').value = r.description || '';
+            renderPerms(permsOf(r));
+            document.getElementById('roleModal').style.visibility = 'visible';
+            document.getElementById('roleModal').style.opacity = '1';
+        }
+        async function saveRole() {
+            const name = document.getElementById('rName').value.trim();
+            if (!name) { UI.toast('اسم الدور مطلوب', 'warn'); return; }
+            const permissions = Array.from(document.querySelectorAll('#rPerms input:checked')).map(c => c.value);
+            const rec = { name, description: document.getElementById('rDesc').value.trim(), permissions };
+            if (editingRid) {
+                const r = await ARDB.getById('roles', editingRid);
+                if (!r) return;
+                r.name = name; r.description = rec.description; r.permissions = permissions;
+                await ARDB.put('roles', r);
+                UI.toast('تم التعديل', 'ok');
+            } else {
+                await ARDB.add('roles', rec);
+                UI.toast('تمت الإضافة', 'ok');
+            }
+            closeRoleModal(); load();
+        }
+        async function delRole(id) {
+            const r = await ARDB.getById('roles', id);
+            if (!r) return;
+            if (r.name === 'مدير') { UI.toast('لا يمكن حذف دور المدير', 'warn'); return; }
+            const usersWith = (await ARDB.getAll('users')).filter(u => u.roleId === id);
+            if (usersWith.length) { UI.toast('لا يمكن الحذف — يوجد مستخدمون بهذا الدور', 'warn'); return; }
+            const ok = await UI.confirmBox('حذف الدور ' + r.name + '؟');
+            if (!ok) return;
+            await ARDB.remove('roles', id);
+            UI.toast('تم الحذف', 'ok'); load();
+        }
+        load();
+    </script>
+</body>
+</html>

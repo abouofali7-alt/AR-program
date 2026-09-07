@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>التصنيفات — AR-Program</title>
+    <link rel="stylesheet" href="../../css/global.css">
+    <link rel="stylesheet" href="../../css/app.css">
+    <link rel="stylesheet" href="../../css/responsive.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
+</head>
+<body class="dark-mode">
+    <div id="appHeaderHost"></div>
+    <main class="pagewrap" style="padding:22px;max-width:800px;margin:0 auto;">
+        <div class="page-head">
+            <div>
+                <h2>التصنيفات</h2>
+                <div class="sub">تصنيف المنتجات</div>
+            </div>
+            <div class="page-actions">
+                <button class="btn btn-primary-soft" onclick="openCatModal()"><i class="fa-solid fa-plus"></i> تصنيف جديد</button>
+            </div>
+        </div>
+        <div class="table-card">
+            <div class="table-head">التصنيفات</div>
+            <div class="table-scroll">
+                <table class="data-table">
+                    <thead><tr><th>الاسم</th><th>الوصف</th><th></th></tr></thead>
+                    <tbody id="catBody"></tbody>
+                </table>
+            </div>
+        </div>
+    </main>
+
+    <div id="catModal" class="modal-mask" style="visibility:hidden;opacity:0;">
+        <div class="modal-box">
+            <h3 id="catModalTitle">تصنيف جديد</h3>
+            <div class="form-grid">
+                <div class="form-item"><label>الاسم</label><input id="cName"></div>
+                <div class="form-item"><label>الوصف</label><input id="cDesc"></div>
+            </div>
+            <div style="display:flex;gap:10px;justify-content:flex-end;">
+                <button class="btn btn-secondary" onclick="closeCatModal()">إلغاء</button>
+                <button class="btn btn-primary-soft" onclick="saveCat()">حفظ</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="../../js/ui.js"></script>
+    <script src="../../js/db.js"></script>
+    <script src="../../js/app.js"></script>
+    <script>
+        let editingCid = null;
+        async function load() {
+            const cats = await ARDB.getAll('categories');
+            document.getElementById('catBody').innerHTML = cats.map(c =>
+                '<tr><td>' + c.name + '</td><td>' + (c.desc || '') + '</td>' +
+                '<td style="text-align:left;white-space:nowrap;">' +
+                '<button class="btn btn-sm" onclick="editCat(' + c.id + ')"><i class="fa-solid fa-pen"></i></button> ' +
+                '<button class="btn btn-sm btn-danger" onclick="delCat(' + c.id + ')"><i class="fa-solid fa-trash"></i></button></td></tr>'
+            ).join('') || '<tr><td colspan="3" class="empty-state">لا توجد تصنيفات</td></tr>';
+        }
+        function openCatModal() {
+            editingCid = null;
+            document.getElementById('catModalTitle').textContent = 'تصنيف جديد';
+            document.getElementById('cName').value = '';
+            document.getElementById('cDesc').value = '';
+            document.getElementById('catModal').style.visibility = 'visible';
+            document.getElementById('catModal').style.opacity = '1';
+        }
+        function closeCatModal() {
+            document.getElementById('catModal').style.visibility = 'hidden';
+            document.getElementById('catModal').style.opacity = '0';
+        }
+        async function editCat(id) {
+            const c = await ARDB.getById('categories', id);
+            if (!c) return;
+            editingCid = id;
+            document.getElementById('catModalTitle').textContent = 'تعديل تصنيف';
+            document.getElementById('cName').value = c.name || '';
+            document.getElementById('cDesc').value = c.desc || '';
+            document.getElementById('catModal').style.visibility = 'visible';
+            document.getElementById('catModal').style.opacity = '1';
+        }
+        async function saveCat() {
+            const name = document.getElementById('cName').value.trim();
+            if (!name) { UI.toast('الاسم مطلوب', 'warn'); return; }
+            const rec = { name, desc: document.getElementById('cDesc').value.trim() };
+            if (editingCid) { rec.id = editingCid; await ARDB.put('categories', rec); UI.toast('تم التعديل', 'ok'); }
+            else { await ARDB.add('categories', rec); UI.toast('تمت الإضافة', 'ok'); }
+            closeCatModal(); load();
+        }
+        async function delCat(id) {
+            const ok = await UI.confirmBox('حذف التصنيف؟');
+            if (!ok) return;
+            await ARDB.remove('categories', id);
+            UI.toast('تم الحذف', 'ok'); load();
+        }
+        load();
+    </script>
+</body>
+</html>
