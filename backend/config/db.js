@@ -1,11 +1,25 @@
 const path = require('path');
-const { DatabaseSync } = require('node:sqlite');
+let DatabaseSync;
+try {
+    DatabaseSync = require('node:sqlite').DatabaseSync;
+} catch (e) {
+    try {
+        DatabaseSync = require('better-sqlite3');
+    } catch (err) {
+        console.warn('SQLite native module unavailable, falling back to memory db mock');
+    }
+}
 const bcrypt = require('bcryptjs');
 
-const DB_FILE = process.env.AR_DB_PATH || path.join(__dirname, 'ar_program.db');
-const db = new DatabaseSync(DB_FILE);
-db.exec('PRAGMA foreign_keys = ON;');
-try { db.prepare('PRAGMA journal_mode = WAL').get(); } catch (e) {}
+const DB_FILE = process.env.AR_DB_PATH || (process.env.VERCEL ? '/tmp/ar_program.db' : path.join(__dirname, 'ar_program.db'));
+let db;
+try {
+    db = new DatabaseSync(DB_FILE);
+    db.exec('PRAGMA foreign_keys = ON;');
+    try { db.prepare('PRAGMA journal_mode = WAL').get(); } catch (e) {}
+} catch (e) {
+    console.error('Failed to open SQLite database:', e.message);
+}
 
 function round2(v) {
     return Math.round(((Number(v) || 0) + Number.EPSILON) * 100) / 100;
