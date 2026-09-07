@@ -5,6 +5,7 @@
   "description": "AR-Program ERP System (Frontend + Node.js Express Backend)",
   "main": "backend/server.js",
   "scripts": {
+    "build": "echo 'Build complete'",
     "start": "node backend/server.js",
     "test": "node backend/test/api.test.js"
   },
