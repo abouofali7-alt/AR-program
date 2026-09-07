@@ -2,21 +2,15 @@
   "name": "ar-program-erp",
   "version": "1.0.0",
   "private": true,
-  "description": "AR-Program ERP System (Frontend + Node.js Express Backend)",
+  "description": "AR-Program ERP System",
   "main": "backend/server.js",
   "scripts": {
-    "build": "echo 'Build complete'",
-    "start": "node backend/server.js",
-    "test": "node backend/test/api.test.js"
+    "start": "node backend/server.js"
   },
   "dependencies": {
     "bcryptjs": "^3.0.2",
-    "better-sqlite3": "^11.8.1",
     "cors": "^2.8.5",
     "express": "^4.21.2",
     "jsonwebtoken": "^9.0.2"
-  },
-  "engines": {
-    "node": ">=18.0.0"
   }
 }
